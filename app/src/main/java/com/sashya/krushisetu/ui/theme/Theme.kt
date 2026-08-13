@@ -1,57 +1,52 @@
 package com.sashya.krushisetu.ui.theme
 
-import android.app.Activity
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
-)
+private val ColorSand = Color(0xFFF7E9D3)
+private val ColorMint = Color(0xFF9ED9A7)
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
+    primary = LeafGreen,
+    onPrimary = FieldCream,
+    primaryContainer = LightLeafGreen,
+    onPrimaryContainer = DeepText,
+    secondary = SoilBrown,
+    onSecondary = FieldCream,
+    secondaryContainer = ColorSand,
+    onSecondaryContainer = DeepText,
+    tertiary = AlertOrange,
+    onTertiary = FieldCream,
+    background = FieldCream,
+    onBackground = DeepText,
+    surface = FieldCream,
+    onSurface = DeepText,
+    surfaceVariant = SoftSurface,
+    onSurfaceVariant = MutedText,
+    error = ErrorRed
+)
 
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+private val DarkColorScheme = darkColorScheme(
+    primary = ColorMint,
+    onPrimary = DeepText,
+    primaryContainer = LeafGreen,
+    onPrimaryContainer = FieldCream,
+    background = DeepText,
+    onBackground = FieldCream,
+    surface = Color(0xFF1E3023),
+    onSurface = FieldCream
 )
 
 @Composable
 fun KrushisetuTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
+    darkTheme: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
-
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme,
         typography = Typography,
         content = content
     )
