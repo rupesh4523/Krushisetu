@@ -92,32 +92,35 @@ class PlantAiRepository {
             - Use simple, farmer-friendly English.
         """.trimIndent()
 
-        val textPart = JSONObject().put("text", prompt)
-        val imagePart = JSONObject().put(
-            "inline_data",
-            JSONObject()
-                .put("mime_type", "image/jpeg")
-                .put("data", imageData)
-        )
         return JSONObject()
+            .put("model", modelName)
             .put(
-                "contents",
-                JSONArray().put(
-                    JSONObject().put(
-                        "parts",
-                        JSONArray()
-                            .put(textPart)
-                            .put(imagePart)
+                "input",
+                JSONArray()
+                    .put(
+                        JSONObject()
+                            .put("type", "image")
+                            .put("mime_type", "image/jpeg")
+                            .put("data", imageData)
                     )
-                )
+                    .put(
+                        JSONObject()
+                            .put("type", "text")
+                            .put("text", prompt)
+                    )
             )
             .put(
-                "generationConfig",
+                "generation_config",
                 JSONObject()
-                    .put("temperature", 0.2)
-                    .put("maxOutputTokens", 700)
-                    .put("responseMimeType", "application/json")
-                    .put("responseSchema", responseSchema)
+                    .put("max_output_tokens", 700)
+                    .put("thinking_level", "low")
+            )
+            .put(
+                "response_format",
+                JSONObject()
+                    .put("type", "text")
+                    .put("mime_type", "application/json")
+                    .put("schema", responseSchema)
             )
     }
 
@@ -156,13 +159,19 @@ class PlantAiRepository {
     }
 
     private fun parseAnalysis(response: JSONObject): PlantAnalysis {
-        val responseText = response
-            .optJSONArray("candidates")
-            ?.optJSONObject(0)
-            ?.optJSONObject("content")
-            ?.optJSONArray("parts")
-            ?.optJSONObject(0)
-            ?.optString("text")
+        val responseText = response.optJSONArray("steps")
+            ?.let { steps ->
+                (0 until steps.length())
+                    .mapNotNull { steps.optJSONObject(it) }
+                    .lastOrNull { it.optString("type") == "model_output" }
+                    ?.optJSONArray("content")
+                    ?.let { content ->
+                        (0 until content.length())
+                            .mapNotNull { content.optJSONObject(it) }
+                            .firstOrNull { it.optString("type") == "text" }
+                            ?.optString("text")
+                    }
+            }
 
         if (responseText.isNullOrBlank()) {
             throw IllegalStateException("Krushi AI Assist did not return an analysis. Please take a clearer photo and try again.")
@@ -196,10 +205,12 @@ class PlantAiRepository {
 
     private companion object {
         const val apiUrl =
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+            "https://generativelanguage.googleapis.com/v1beta/interactions"
+
+        const val modelName = "gemini-3.5-flash"
 
         val responseSchema = JSONObject()
-            .put("type", "OBJECT")
+            .put("type", "object")
             .put(
                 "properties",
                 JSONObject()
@@ -224,12 +235,12 @@ class PlantAiRepository {
             )
 
         fun stringSchema(description: String) = JSONObject()
-            .put("type", "STRING")
+            .put("type", "string")
             .put("description", description)
 
         fun stringListSchema(description: String) = JSONObject()
-            .put("type", "ARRAY")
+            .put("type", "array")
             .put("description", description)
-            .put("items", JSONObject().put("type", "STRING"))
+            .put("items", JSONObject().put("type", "string"))
     }
 }
