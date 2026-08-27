@@ -1,5 +1,9 @@
 package com.sashya.krushisetu.feature.home
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -16,13 +20,23 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.sashya.krushisetu.data.local.SampleData
+import com.sashya.krushisetu.data.location.LocationRepository
+import com.sashya.krushisetu.data.weather.WeatherData
+import com.sashya.krushisetu.data.weather.WeatherRepository
 import com.sashya.krushisetu.ui.components.AdvisoryCard
 import com.sashya.krushisetu.ui.components.ScreenHeader
 import com.sashya.krushisetu.ui.components.SectionTitle
@@ -38,101 +52,383 @@ fun HomeScreen(
     onOpenPlantScan: () -> Unit,
     onOpenConsultation: () -> Unit
 ) {
+
+    val context = LocalContext.current
+
+    // ---------------------------------------------------------
+    // WEATHER STATE
+    // ---------------------------------------------------------
+
+    var weatherData by remember {
+        mutableStateOf<WeatherData?>(null)
+    }
+
+    var weatherLoading by remember {
+        mutableStateOf(true)
+    }
+
+    var weatherError by remember {
+        mutableStateOf<String?>(null)
+    }
+
+    // ---------------------------------------------------------
+    // LOCATION PERMISSION STATE
+    // ---------------------------------------------------------
+
+    var hasLocationPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED ||
+                    ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.ACCESS_COARSE_LOCATION
+                    ) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    var locationRequested by remember {
+        mutableStateOf(false)
+    }
+
+    // ---------------------------------------------------------
+    // REPOSITORIES
+    // ---------------------------------------------------------
+
+    val weatherRepository = remember {
+        WeatherRepository()
+    }
+
+    val locationRepository = remember {
+        LocationRepository(context.applicationContext)
+    }
+
+    // ---------------------------------------------------------
+    // LOCATION PERMISSION LAUNCHER
+    // ---------------------------------------------------------
+
+    val locationPermissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestMultiplePermissions()
+        ) { permissions ->
+
+            hasLocationPermission =
+                permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                        permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        }
+
+    // ---------------------------------------------------------
+    // REQUEST LOCATION PERMISSION
+    // ---------------------------------------------------------
+
+    LaunchedEffect(Unit) {
+
+        if (!hasLocationPermission && !locationRequested) {
+
+            locationRequested = true
+
+            locationPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        }
+    }
+
+    // ---------------------------------------------------------
+    // GET DEVICE LOCATION + WEATHER
+    // ---------------------------------------------------------
+
+    LaunchedEffect(hasLocationPermission) {
+
+        if (hasLocationPermission) {
+
+            weatherLoading = true
+            weatherError = null
+
+            val locationResult =
+                locationRepository.getCurrentLocation()
+
+            locationResult
+                .onSuccess { location ->
+
+                    val weatherResult =
+                        weatherRepository.getCurrentWeather(
+                            latitude = location.latitude,
+                            longitude = location.longitude,
+                            locationName = location.locationName
+                        )
+
+                    weatherResult
+                        .onSuccess { weather ->
+                            weatherData = weather
+                        }
+                        .onFailure {
+                            weatherError = "Unable to load weather."
+                        }
+                }
+                .onFailure {
+                    weatherError = "Unable to determine your location."
+                }
+
+            weatherLoading = false
+        } else {
+
+            weatherLoading = false
+
+            if (locationRequested) {
+                weatherError = "Location permission is required for weather."
+            }
+        }
+    }
+
+    // ---------------------------------------------------------
+    // HOME UI
+    // ---------------------------------------------------------
+
     LazyColumn(
         modifier = modifier,
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp)
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+            bottom = 24.dp
+        )
     ) {
+
         item {
             ScreenHeader(
                 title = "Namaste, " + farmerName + "! 👋",
                 subtitle = "Here is your farm update for today."
             )
         }
-        item { WeatherHeroCard() }
-        item { PlantScanBanner(onOpenPlantScan) }
+
+        item {
+            WeatherHeroCard(
+                weather = weatherData,
+                isLoading = weatherLoading,
+                errorMessage = weatherError
+            )
+        }
+
+        item {
+            PlantScanBanner(onOpenPlantScan)
+        }
+
         item {
             SectionTitle("Quick actions")
-            QuickActions(onOpenCrops, onOpenAdvisory, onOpenConsultation)
+
+            QuickActions(
+                onOpenCrops,
+                onOpenAdvisory,
+                onOpenConsultation
+            )
         }
+
         item {
-            SectionTitle("Your crops", action = "View all", onAction = onOpenCrops)
+            SectionTitle(
+                "Your crops",
+                action = "View all",
+                onAction = onOpenCrops
+            )
+
             CropSummaryCard()
         }
+
         item {
-            SectionTitle("Today's advisory", action = "View all", onAction = onOpenAdvisory)
+            SectionTitle(
+                "Today's advisory",
+                action = "View all",
+                onAction = onOpenAdvisory
+            )
+
             AdvisoryCard(
                 advisory = SampleData.advisories.first(),
                 modifier = Modifier.padding(horizontal = 20.dp)
             )
         }
-        item { Spacer(Modifier.height(16.dp)) }
+
+        item {
+            Spacer(Modifier.height(16.dp))
+        }
     }
 }
 
+// -------------------------------------------------------------
+// WEATHER CARD
+// -------------------------------------------------------------
+
 @Composable
-private fun PlantScanBanner(onOpenPlantScan: () -> Unit) {
+private fun WeatherHeroCard(
+    weather: WeatherData?,
+    isLoading: Boolean,
+    errorMessage: String?
+) {
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = LeafGreen
+        )
+    ) {
+
+        Row(
+            modifier = Modifier.padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+
+                if (isLoading) {
+
+                    Text(
+                        text = "Current location",
+                        color = Color.White.copy(alpha = 0.82f),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+
+                    Text(
+                        text = "Loading...",
+                        color = Color.White,
+                        fontSize = 42.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+
+                    Text(
+                        text = "Getting your location",
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                } else if (weather != null) {
+
+                    Text(
+                        text = weather.location,
+                        color = Color.White.copy(alpha = 0.82f),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+
+                    Text(
+                        text = weather.temperature,
+                        color = Color.White,
+                        fontSize = 42.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+
+                    Text(
+                        text = weather.condition,
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Text(
+                        text = "Rain chance ${weather.rainChance}  •  Humidity ${weather.humidity}",
+                        color = Color.White.copy(alpha = 0.82f),
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(top = 10.dp)
+                    )
+
+                } else {
+
+                    Text(
+                        text = "Current location",
+                        color = Color.White.copy(alpha = 0.82f),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+
+                    Text(
+                        text = "Weather unavailable",
+                        color = Color.White,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+
+                    Text(
+                        text = errorMessage ?: "Please try again later.",
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+
+            Text(
+                text = weather?.weatherIcon ?: "🌤️",
+                fontSize = 62.sp
+            )
+        }
+    }
+}
+
+// -------------------------------------------------------------
+// PLANT SCAN BANNER
+// -------------------------------------------------------------
+
+@Composable
+private fun PlantScanBanner(
+    onOpenPlantScan: () -> Unit
+) {
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 16.dp)
             .clickable(onClick = onOpenPlantScan),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        )
     ) {
+
         Row(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("📷", fontSize = 30.sp)
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Plant Scan", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+
+            Text(
+                "📷",
+                fontSize = 30.sp
+            )
+
+            Spacer(
+                Modifier.width(12.dp)
+            )
+
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+
+                Text(
+                    "Plant Scan",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+
                 Text(
                     "Capture a plant photo for an AI-assisted health check.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MutedText
                 )
             }
-            Text("→", fontSize = 22.sp, color = LeafGreen)
+
+            Text(
+                "→",
+                fontSize = 22.sp,
+                color = LeafGreen
+            )
         }
     }
 }
 
-@Composable
-private fun WeatherHeroCard() {
-    val weather = SampleData.weather
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = LeafGreen)
-    ) {
-        Row(
-            modifier = Modifier.padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(weather.location, color = Color.White.copy(alpha = 0.82f), style = MaterialTheme.typography.labelLarge)
-                Text(
-                    weather.temperature,
-                    color = Color.White,
-                    fontSize = 42.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-                Text(weather.condition, color = Color.White, style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    text = "Rain chance " + weather.rainChance + "  •  Humidity " + weather.humidity,
-                    color = Color.White.copy(alpha = 0.82f),
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(top = 10.dp)
-                )
-            }
-            Text(text = "⛅", fontSize = 62.sp)
-        }
-    }
-}
+// -------------------------------------------------------------
+// QUICK ACTIONS
+// -------------------------------------------------------------
 
 @Composable
 private fun QuickActions(
@@ -140,30 +436,70 @@ private fun QuickActions(
     onOpenAdvisory: () -> Unit,
     onOpenConsultation: () -> Unit
 ) {
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        QuickAction("🌱", "My crops", Modifier.weight(1f), onOpenCrops)
-        QuickAction("✦", "Get advice", Modifier.weight(1f), onOpenAdvisory)
-        QuickAction("◉", "Ask expert", Modifier.weight(1f), onOpenConsultation)
+
+        QuickAction(
+            "🌱",
+            "My crops",
+            Modifier.weight(1f),
+            onOpenCrops
+        )
+
+        QuickAction(
+            "✦",
+            "Get advice",
+            Modifier.weight(1f),
+            onOpenAdvisory
+        )
+
+        QuickAction(
+            "◉",
+            "Ask expert",
+            Modifier.weight(1f),
+            onOpenConsultation
+        )
     }
 }
 
+// -------------------------------------------------------------
+// QUICK ACTION CARD
+// -------------------------------------------------------------
+
 @Composable
-private fun QuickAction(emoji: String, label: String, modifier: Modifier, onClick: () -> Unit) {
+private fun QuickAction(
+    emoji: String,
+    label: String,
+    modifier: Modifier,
+    onClick: () -> Unit
+) {
+
     Card(
         modifier = modifier.clickable(onClick = onClick),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
     ) {
+
         Column(
-            modifier = Modifier.padding(vertical = 14.dp, horizontal = 8.dp),
+            modifier = Modifier.padding(
+                vertical = 14.dp,
+                horizontal = 8.dp
+            ),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(emoji, fontSize = 22.sp)
+
+            Text(
+                emoji,
+                fontSize = 22.sp
+            )
+
             Text(
                 label,
                 style = MaterialTheme.typography.labelMedium,
@@ -174,28 +510,68 @@ private fun QuickAction(emoji: String, label: String, modifier: Modifier, onClic
     }
 }
 
+// -------------------------------------------------------------
+// CROP SUMMARY
+// -------------------------------------------------------------
+
 @Composable
 private fun CropSummaryCard() {
+
     val crop = SampleData.crops.first()
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        )
     ) {
+
         Row(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(crop.healthEmoji, fontSize = 38.sp)
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(crop.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(crop.variety + " • " + crop.area, style = MaterialTheme.typography.bodySmall, color = MutedText)
-                Text(crop.stage, style = MaterialTheme.typography.labelMedium, color = LeafGreen, modifier = Modifier.padding(top = 4.dp))
+
+            Text(
+                crop.healthEmoji,
+                fontSize = 38.sp
+            )
+
+            Spacer(
+                Modifier.width(12.dp)
+            )
+
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+
+                Text(
+                    crop.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    crop.variety + " • " + crop.area,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MutedText
+                )
+
+                Text(
+                    crop.stage,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = LeafGreen,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
             }
-            Text("● " + crop.healthLabel, color = LeafGreen, style = MaterialTheme.typography.labelSmall)
+
+            Text(
+                "● " + crop.healthLabel,
+                color = LeafGreen,
+                style = MaterialTheme.typography.labelSmall
+            )
         }
     }
 }
