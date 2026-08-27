@@ -23,6 +23,8 @@ import com.sashya.krushisetu.feature.profile.ProfileScreen
 import com.sashya.krushisetu.feature.plantscan.PlantScanScreen
 import com.sashya.krushisetu.ui.components.KrushiBottomBar
 import com.sashya.krushisetu.ui.navigation.AppDestination
+import com.sashya.krushisetu.feature.supplier.SupplierDashboardScreen
+import com.sashya.krushisetu.feature.supplier.SupplierProfileScreen
 
 private enum class AppEntry {
     WELCOME,
@@ -47,6 +49,9 @@ fun KrushiSetuApp() {
     var destinationName by remember { mutableStateOf(AppDestination.HOME.name) }
     var userRoleName by remember {
         mutableStateOf(UserRole.FARMER.name)
+    }
+    var supplierScreen by remember {
+        mutableStateOf("DASHBOARD")
     }
     val appEntry = AppEntry.valueOf(appEntryName)
     val destination = AppDestination.valueOf(destinationName)
@@ -143,7 +148,24 @@ fun KrushiSetuApp() {
 
             UserRole.ADVISOR -> AdvisorDashboardScreen()
 
-            UserRole.SUPPLIER -> SupplierDashboardScreen()
+            UserRole.SUPPLIER -> when (supplierScreen) {
+
+                "DASHBOARD" -> SupplierDashboardScreen(
+                    supplierName = authRepository.currentUserName() ?: "Supplier",
+                    onOpenProfile = {
+                        supplierScreen = "PROFILE"
+                    }
+                )
+
+                "PROFILE" ->  SupplierProfileScreen(
+                    supplierName = authRepository.currentUserName() ?: "Supplier",
+                    onBack = {
+                        supplierScreen = "DASHBOARD"
+                    }
+                )
+            }
         }
     }
 }
+
+
