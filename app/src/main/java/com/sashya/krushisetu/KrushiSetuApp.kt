@@ -12,6 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.sashya.krushisetu.data.auth.FirebaseAuthRepository
 import com.sashya.krushisetu.feature.advisory.AdvisoryScreen
+import com.sashya.krushisetu.feature.advisory.AdvisorDashboardScreen
+import com.sashya.krushisetu.feature.supplier.SupplierDashboardScreen
 import com.sashya.krushisetu.feature.auth.AuthenticationScreen
 import com.sashya.krushisetu.feature.consultation.ConsultationScreen
 import com.sashya.krushisetu.feature.crops.CropsScreen
@@ -27,6 +29,11 @@ private enum class AppEntry {
     AUTHENTICATION,
     APP
 }
+private enum class UserRole {
+    FARMER,
+    ADVISOR,
+    SUPPLIER
+}
 
 @Composable
 fun KrushiSetuApp() {
@@ -38,6 +45,9 @@ fun KrushiSetuApp() {
         )
     }
     var destinationName by remember { mutableStateOf(AppDestination.HOME.name) }
+    var userRoleName by remember {
+        mutableStateOf(UserRole.FARMER.name)
+    }
     val appEntry = AppEntry.valueOf(appEntryName)
     val destination = AppDestination.valueOf(destinationName)
 
@@ -48,48 +58,92 @@ fun KrushiSetuApp() {
         )
         AppEntry.AUTHENTICATION -> AuthenticationScreen(
             authRepository = authRepository,
-            onAuthenticated = { appEntryName = AppEntry.APP.name },
+            onAuthenticated = { role ->
+
+                userRoleName = when (role) {
+                    "Farmer" -> UserRole.FARMER.name
+                    "Advisor" -> UserRole.ADVISOR.name
+                    "Supplier" -> UserRole.SUPPLIER.name
+                    else -> UserRole.FARMER.name
+                }
+
+                appEntryName = AppEntry.APP.name
+            },
             onContinueAsGuest = { appEntryName = AppEntry.APP.name }
         )
-        AppEntry.APP -> Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            bottomBar = {
-                KrushiBottomBar(
-                    currentDestination = destination,
-                    onDestinationSelected = { destinationName = it.name }
-                )
+        AppEntry.APP -> when (UserRole.valueOf(userRoleName)) {
+
+            UserRole.FARMER -> Scaffold(
+                modifier = Modifier.fillMaxSize(),
+                bottomBar = {
+                    KrushiBottomBar(
+                        currentDestination = destination,
+                        onDestinationSelected = {
+                            destinationName = it.name
+                        }
+                    )
+                }
+            ) { innerPadding ->
+
+                when (destination) {
+
+                    AppDestination.HOME -> HomeScreen(
+                        modifier = Modifier.padding(innerPadding),
+                        farmerName = authRepository.currentUserName() ?: "Suresh",
+                        onOpenCrops = {
+                            destinationName = AppDestination.CROPS.name
+                        },
+                        onOpenAdvisory = {
+                            destinationName = AppDestination.ADVISORY.name
+                        },
+                        onOpenPlantScan = {
+                            destinationName = AppDestination.PLANT_SCAN.name
+                        },
+                        onOpenConsultation = {
+                            destinationName = AppDestination.CONSULTATION.name
+                        }
+                    )
+
+                    AppDestination.CROPS -> CropsScreen(
+                        modifier = Modifier.padding(innerPadding)
+                    )
+
+                    AppDestination.ADVISORY -> AdvisoryScreen(
+                        modifier = Modifier.padding(innerPadding),
+                        onOpenPlantScan = {
+                            destinationName = AppDestination.PLANT_SCAN.name
+                        }
+                    )
+
+                    AppDestination.PLANT_SCAN -> PlantScanScreen(
+                        modifier = Modifier.padding(innerPadding),
+                        onOpenConsultation = {
+                            destinationName = AppDestination.CONSULTATION.name
+                        }
+                    )
+
+                    AppDestination.CONSULTATION -> ConsultationScreen(
+                        modifier = Modifier.padding(innerPadding)
+                    )
+
+                    AppDestination.PROFILE -> ProfileScreen(
+                        modifier = Modifier.padding(innerPadding),
+                        signedInName = authRepository.currentUserName(),
+                        signedInEmail = authRepository.currentUserEmail(),
+                        onSignOut = {
+                            authRepository.signOut()
+                            appEntryName = AppEntry.AUTHENTICATION.name
+                        },
+                        onOpenLogin = {
+                            appEntryName = AppEntry.AUTHENTICATION.name
+                        }
+                    )
+                }
             }
-        ) { innerPadding ->
-            when (destination) {
-                AppDestination.HOME -> HomeScreen(
-                    modifier = Modifier.padding(innerPadding),
-                    farmerName = authRepository.currentUserName() ?: "Suresh",
-                    onOpenCrops = { destinationName = AppDestination.CROPS.name },
-                    onOpenAdvisory = { destinationName = AppDestination.ADVISORY.name },
-                    onOpenPlantScan = { destinationName = AppDestination.PLANT_SCAN.name },
-                    onOpenConsultation = { destinationName = AppDestination.CONSULTATION.name }
-                )
-                AppDestination.CROPS -> CropsScreen(modifier = Modifier.padding(innerPadding))
-                AppDestination.ADVISORY -> AdvisoryScreen(
-                    modifier = Modifier.padding(innerPadding),
-                    onOpenPlantScan = { destinationName = AppDestination.PLANT_SCAN.name }
-                )
-                AppDestination.PLANT_SCAN -> PlantScanScreen(
-                    modifier = Modifier.padding(innerPadding),
-                    onOpenConsultation = { destinationName = AppDestination.CONSULTATION.name }
-                )
-                AppDestination.CONSULTATION -> ConsultationScreen(modifier = Modifier.padding(innerPadding))
-                AppDestination.PROFILE -> ProfileScreen(
-                    modifier = Modifier.padding(innerPadding),
-                    signedInName = authRepository.currentUserName(),
-                    signedInEmail = authRepository.currentUserEmail(),
-                    onSignOut = {
-                        authRepository.signOut()
-                        appEntryName = AppEntry.AUTHENTICATION.name
-                    },
-                    onOpenLogin = { appEntryName = AppEntry.AUTHENTICATION.name }
-                )
-            }
+
+            UserRole.ADVISOR -> AdvisorDashboardScreen()
+
+            UserRole.SUPPLIER -> SupplierDashboardScreen()
         }
     }
 }
