@@ -23,17 +23,14 @@ import com.sashya.krushisetu.feature.profile.ProfileScreen
 import com.sashya.krushisetu.feature.plantscan.PlantScanScreen
 import com.sashya.krushisetu.ui.components.KrushiBottomBar
 import com.sashya.krushisetu.ui.navigation.AppDestination
+import com.sashya.krushisetu.data.model.UserRole
 
 private enum class AppEntry {
     WELCOME,
     AUTHENTICATION,
     APP
 }
-private enum class UserRole {
-    FARMER,
-    ADVISOR,
-    SUPPLIER
-}
+
 
 @Composable
 fun KrushiSetuApp() {
@@ -60,10 +57,10 @@ fun KrushiSetuApp() {
             authRepository = authRepository,
             onAuthenticated = { role ->
 
-                userRoleName = when (role) {
-                    "Farmer" -> UserRole.FARMER.name
-                    "Advisor" -> UserRole.ADVISOR.name
-                    "Supplier" -> UserRole.SUPPLIER.name
+                userRoleName = when (role.uppercase()) {
+                    UserRole.FARMER.name -> UserRole.FARMER.name
+                    UserRole.ADVISOR.name -> UserRole.ADVISOR.name
+                    UserRole.SUPPLIER.name -> UserRole.SUPPLIER.name
                     else -> UserRole.FARMER.name
                 }
 
