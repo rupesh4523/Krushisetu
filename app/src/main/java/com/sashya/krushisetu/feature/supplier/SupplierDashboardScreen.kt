@@ -2,17 +2,18 @@ package com.sashya.krushisetu.feature.supplier
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -20,11 +21,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -35,51 +33,22 @@ import com.sashya.krushisetu.ui.theme.FieldCream
 import com.sashya.krushisetu.ui.theme.LeafGreen
 import com.sashya.krushisetu.ui.theme.MutedText
 
+
 @Composable
-fun SupplierDashboardScreen() {
-
-    var selectedSection by remember {
-        mutableStateOf<String?>(null)
-    }
-
-    val supplierSections = listOf(
-        SupplierSection(
-            icon = "👤",
-            title = "Profile & Company",
-            description = "Company details, branches and contact information"
-        ),
-        SupplierSection(
-            icon = "📦",
-            title = "Products Management",
-            description = "Manage seeds, fertilizers, pesticides and equipment"
-        ),
-        SupplierSection(
-            icon = "📋",
-            title = "Orders Management",
-            description = "View new orders, order status and order history"
-        ),
-        SupplierSection(
-            icon = "🚚",
-            title = "Delivery Management",
-            description = "Dispatch orders and track deliveries"
-        ),
-        SupplierSection(
-            icon = "₹",
-            title = "Payments",
-            description = "Payment history, transactions and payouts"
-        ),
-        SupplierSection(
-            icon = "📊",
-            title = "Reports & Analytics",
-            description = "Sales reports, top products and farmer demand"
-        )
-    )
+fun SupplierDashboardScreen(
+    supplierName: String,
+    onOpenProfile: () -> Unit,
+    onOpenProducts: () -> Unit,
+    onOpenOrders: () -> Unit,
+    onOpenDelivery: () -> Unit,
+    onOpenPayments: () -> Unit,
+    onOpenAnalytics: () -> Unit
+) {
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(FieldCream)
-            .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 18.dp)
     ) {
 
@@ -109,43 +78,27 @@ fun SupplierDashboardScreen() {
                 )
             }
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            // PROFILE BUTTON
+            OutlinedButton(
+                onClick = {
+                    onOpenProfile()
+                },
+                modifier = Modifier.size(48.dp),
+                contentPadding = PaddingValues(0.dp),
+                shape = RoundedCornerShape(14.dp)
             ) {
-
-                OutlinedButton(
-                    onClick = {
-                        selectedSection = "Notifications"
-                    },
-                    modifier = Modifier.size(48.dp),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
-                    shape = RoundedCornerShape(14.dp)
-                ) {
-                    Text(
-                        text = "🔔",
-                        fontSize = 18.sp
-                    )
-                }
-
-                OutlinedButton(
-                    onClick = {
-                        selectedSection = "Profile & Company"
-                    },
-                    modifier = Modifier.size(48.dp),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
-                    shape = RoundedCornerShape(14.dp)
-                ) {
-                    Text(
-                        text = "👤",
-                        fontSize = 18.sp
-                    )
-                }
+                Text(
+                    text = "👤",
+                    fontSize = 18.sp
+                )
             }
         }
+
 
         Spacer(
             modifier = Modifier.height(22.dp)
         )
+
 
         // ---------------------------------------------------------
         // WELCOME CARD
@@ -164,7 +117,7 @@ fun SupplierDashboardScreen() {
             ) {
 
                 Text(
-                    text = "Welcome back, Supplier 👋",
+                    text = "Welcome back, $supplierName 👋",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
@@ -184,9 +137,10 @@ fun SupplierDashboardScreen() {
                     modifier = Modifier.height(16.dp)
                 )
 
+                // MANAGE PRODUCTS BUTTON
                 Button(
                     onClick = {
-                        selectedSection = "Products Management"
+                        onOpenProducts()
                     },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color.White,
@@ -202,12 +156,14 @@ fun SupplierDashboardScreen() {
             }
         }
 
+
         Spacer(
             modifier = Modifier.height(20.dp)
         )
 
+
         // ---------------------------------------------------------
-        // SUMMARY
+        // BUSINESS OVERVIEW
         // ---------------------------------------------------------
 
         Text(
@@ -219,6 +175,7 @@ fun SupplierDashboardScreen() {
         Spacer(
             modifier = Modifier.height(12.dp)
         )
+
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -240,9 +197,11 @@ fun SupplierDashboardScreen() {
             )
         }
 
+
         Spacer(
             modifier = Modifier.height(12.dp)
         )
+
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -264,16 +223,18 @@ fun SupplierDashboardScreen() {
             )
         }
 
+
         Spacer(
             modifier = Modifier.height(24.dp)
         )
 
+
         // ---------------------------------------------------------
-        // SUPPLIER SERVICES
+        // ANALYTICS
         // ---------------------------------------------------------
 
         Text(
-            text = "Supplier Services",
+            text = "Business Analytics",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold
         )
@@ -282,81 +243,114 @@ fun SupplierDashboardScreen() {
             modifier = Modifier.height(12.dp)
         )
 
-        supplierSections.forEach { section ->
 
-            SupplierFeatureCard(
-                section = section,
-                onClick = {
-                    selectedSection = section.title
-                }
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = Color.White
+            ),
+            elevation = CardDefaults.cardElevation(
+                defaultElevation = 3.dp
             )
+        ) {
 
-            Spacer(
-                modifier = Modifier.height(12.dp)
-            )
-        }
-
-        // ---------------------------------------------------------
-        // SELECTED SECTION
-        // ---------------------------------------------------------
-
-        if (selectedSection != null) {
-
-            Spacer(
-                modifier = Modifier.height(8.dp)
-            )
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = Color.White
-                ),
-                elevation = CardDefaults.cardElevation(
-                    defaultElevation = 3.dp
-                )
+            Column(
+                modifier = Modifier.padding(18.dp)
             ) {
 
-                Column(
-                    modifier = Modifier.padding(18.dp)
+                Text(
+                    text = "Sales Performance",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = LeafGreen
+                )
+
+                Spacer(
+                    modifier = Modifier.height(16.dp)
+                )
+
+                // Simple visual sales bars
+                AnalyticsBar(
+                    month = "Jan",
+                    value = "₹32K",
+                    progress = 0.55f
+                )
+
+                Spacer(
+                    modifier = Modifier.height(10.dp)
+                )
+
+                AnalyticsBar(
+                    month = "Feb",
+                    value = "₹38K",
+                    progress = 0.65f
+                )
+
+                Spacer(
+                    modifier = Modifier.height(10.dp)
+                )
+
+                AnalyticsBar(
+                    month = "Mar",
+                    value = "₹41K",
+                    progress = 0.72f
+                )
+
+                Spacer(
+                    modifier = Modifier.height(10.dp)
+                )
+
+                AnalyticsBar(
+                    month = "Apr",
+                    value = "₹45K",
+                    progress = 0.80f
+                )
+
+                Spacer(
+                    modifier = Modifier.height(10.dp)
+                )
+
+                AnalyticsBar(
+                    month = "May",
+                    value = "₹43K",
+                    progress = 0.76f
+                )
+
+                Spacer(
+                    modifier = Modifier.height(10.dp)
+                )
+
+                AnalyticsBar(
+                    month = "Jun",
+                    value = "₹48.5K",
+                    progress = 0.90f
+                )
+
+                Spacer(
+                    modifier = Modifier.height(14.dp)
+                )
+
+                TextButton(
+                    onClick = {
+                        onOpenAnalytics()
+                    }
                 ) {
-
                     Text(
-                        text = selectedSection!!,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = LeafGreen
-                    )
-
-                    Spacer(
-                        modifier = Modifier.height(6.dp)
-                    )
-
-                    Text(
-                        text = "This section is ready for the next implementation stage.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MutedText
+                        text = "View Full Analytics →",
+                        color = LeafGreen,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
         }
+
 
         Spacer(
             modifier = Modifier.height(20.dp)
         )
     }
 }
-
-
-// -------------------------------------------------------------
-// SUPPLIER SECTION DATA
-// -------------------------------------------------------------
-
-private data class SupplierSection(
-    val icon: String,
-    val title: String,
-    val description: String
-)
 
 
 // -------------------------------------------------------------
@@ -413,68 +407,150 @@ private fun SupplierSummaryCard(
 
 
 // -------------------------------------------------------------
-// FEATURE CARD
+// ANALYTICS BAR
 // -------------------------------------------------------------
 
 @Composable
-private fun SupplierFeatureCard(
-    section: SupplierSection,
+private fun AnalyticsBar(
+    month: String,
+    value: String,
+    progress: Float
+) {
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+
+        Text(
+            text = month,
+            modifier = Modifier.size(width = 35.dp, height = 30.dp),
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Card(
+            modifier = Modifier
+                .weight(1f)
+                .height(22.dp),
+            shape = RoundedCornerShape(10.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = FieldCream
+            )
+        ) {
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(progress)
+                    .fillMaxHeight()
+                    .background(
+                        LeafGreen,
+                        RoundedCornerShape(10.dp)
+                    )
+            )
+        }
+
+        Spacer(
+            modifier = Modifier.size(10.dp)
+        )
+
+        Text(
+            text = value,
+            modifier = Modifier.size(width = 55.dp, height = 30.dp),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = LeafGreen
+        )
+    }
+}
+
+
+// -------------------------------------------------------------
+// SUPPLIER BOTTOM BAR
+// -------------------------------------------------------------
+
+@Composable
+fun SupplierBottomBar(
+    onHome: () -> Unit,
+    onProducts: () -> Unit,
+    onOrders: () -> Unit,
+    onDelivery: () -> Unit,
+    onPayments: () -> Unit
+) {
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White)
+            .padding(
+                horizontal = 6.dp,
+                vertical = 6.dp
+            ),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+
+        SupplierBottomItem(
+            icon = "⌂",
+            label = "Home",
+            onClick = onHome
+        )
+
+        SupplierBottomItem(
+            icon = "📦",
+            label = "Products",
+            onClick = onProducts
+        )
+
+        SupplierBottomItem(
+            icon = "📋",
+            label = "Orders",
+            onClick = onOrders
+        )
+
+        SupplierBottomItem(
+            icon = "🚚",
+            label = "Delivery",
+            onClick = onDelivery
+        )
+
+        SupplierBottomItem(
+            icon = "₹",
+            label = "Payments",
+            onClick = onPayments
+        )
+    }
+}
+
+
+// -------------------------------------------------------------
+// BOTTOM BAR ITEM
+// -------------------------------------------------------------
+
+@Composable
+private fun SupplierBottomItem(
+    icon: String,
+    label: String,
     onClick: () -> Unit
 ) {
 
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 3.dp
-        )
+    TextButton(
+        onClick = onClick
     ) {
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(18.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
 
             Text(
-                text = section.icon,
-                fontSize = 30.sp
+                text = icon,
+                fontSize = 20.sp
             )
-
-            Spacer(
-                modifier = Modifier.size(14.dp)
-            )
-
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-
-                Text(
-                    text = section.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(
-                    modifier = Modifier.height(4.dp)
-                )
-
-                Text(
-                    text = section.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MutedText
-                )
-            }
 
             Text(
-                text = "›",
-                fontSize = 28.sp,
-                color = LeafGreen
+                text = label,
+                fontSize = 11.sp,
+                color = LeafGreen,
+                fontWeight = FontWeight.SemiBold
             )
         }
     }
