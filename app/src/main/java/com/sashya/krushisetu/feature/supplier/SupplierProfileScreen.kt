@@ -36,7 +36,8 @@ import com.sashya.krushisetu.ui.theme.MutedText
 @Composable
 fun SupplierProfileScreen(
     supplierName: String,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onSignOut: () -> Unit
 ) {
 
     var isEditing by remember {
@@ -88,7 +89,10 @@ fun SupplierProfileScreen(
             .fillMaxSize()
             .background(FieldCream)
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 18.dp)
+            .padding(
+                horizontal = 20.dp,
+                vertical = 18.dp
+            )
     ) {
 
         // ---------------------------------------------------------
@@ -363,6 +367,30 @@ fun SupplierProfileScreen(
                 } else {
                     "Edit Profile"
                 },
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Spacer(
+            modifier = Modifier.height(14.dp)
+        )
+
+        // ---------------------------------------------------------
+        // SIGN OUT
+        // ---------------------------------------------------------
+
+        Button(
+            onClick = onSignOut,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFFD32F2F),
+                contentColor = Color.White
+            )
+        ) {
+
+            Text(
+                text = "Sign Out",
                 fontWeight = FontWeight.Bold
             )
         }

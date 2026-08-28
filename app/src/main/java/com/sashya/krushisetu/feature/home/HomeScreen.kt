@@ -1,9 +1,5 @@
 package com.sashya.krushisetu.feature.home
 
-import android.Manifest
-import android.content.pm.PackageManager
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -28,13 +24,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
+
 import com.sashya.krushisetu.data.local.SampleData
-import com.sashya.krushisetu.data.location.LocationRepository
+import com.sashya.krushisetu.data.model.UserProfile
 import com.sashya.krushisetu.data.weather.WeatherData
 import com.sashya.krushisetu.data.weather.WeatherRepository
 import com.sashya.krushisetu.ui.components.AdvisoryCard
@@ -47,13 +42,12 @@ import com.sashya.krushisetu.ui.theme.MutedText
 fun HomeScreen(
     modifier: Modifier = Modifier,
     farmerName: String,
+    userProfile: UserProfile?,
     onOpenCrops: () -> Unit,
     onOpenAdvisory: () -> Unit,
     onOpenPlantScan: () -> Unit,
     onOpenConsultation: () -> Unit
 ) {
-
-    val context = LocalContext.current
 
     // ---------------------------------------------------------
     // WEATHER STATE
@@ -72,116 +66,122 @@ fun HomeScreen(
     }
 
     // ---------------------------------------------------------
-    // LOCATION PERMISSION STATE
-    // ---------------------------------------------------------
-
-    var hasLocationPermission by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED ||
-                    ContextCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.ACCESS_COARSE_LOCATION
-                    ) == PackageManager.PERMISSION_GRANTED
-        )
-    }
-
-    var locationRequested by remember {
-        mutableStateOf(false)
-    }
-
-    // ---------------------------------------------------------
-    // REPOSITORIES
+    // WEATHER REPOSITORY
     // ---------------------------------------------------------
 
     val weatherRepository = remember {
         WeatherRepository()
     }
 
-    val locationRepository = remember {
-        LocationRepository(context.applicationContext)
-    }
-
     // ---------------------------------------------------------
-    // LOCATION PERMISSION LAUNCHER
+    // LOAD FARM WEATHER
     // ---------------------------------------------------------
 
-    val locationPermissionLauncher =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.RequestMultiplePermissions()
-        ) { permissions ->
+    LaunchedEffect(
+        userProfile?.farmLatitude,
+        userProfile?.farmLongitude,
+        userProfile?.farmLocation,
+        userProfile?.village,
+        userProfile?.district
+    ) {
 
-            hasLocationPermission =
-                permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-                        permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        }
+        weatherLoading = true
+        weatherError = null
+        weatherData = null
 
-    // ---------------------------------------------------------
-    // REQUEST LOCATION PERMISSION
-    // ---------------------------------------------------------
+        // -----------------------------------------------------
+        // Get saved farm coordinates
+        // -----------------------------------------------------
 
-    LaunchedEffect(Unit) {
+        val latitude =
+            userProfile?.farmLatitude
 
-        if (!hasLocationPermission && !locationRequested) {
+        val longitude =
+            userProfile?.farmLongitude
 
-            locationRequested = true
+        // -----------------------------------------------------
+        // We need both coordinates.
+        // -----------------------------------------------------
 
-            locationPermissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                )
-            )
-        }
-    }
-
-    // ---------------------------------------------------------
-    // GET DEVICE LOCATION + WEATHER
-    // ---------------------------------------------------------
-
-    LaunchedEffect(hasLocationPermission) {
-
-        if (hasLocationPermission) {
-
-            weatherLoading = true
-            weatherError = null
-
-            val locationResult =
-                locationRepository.getCurrentLocation()
-
-            locationResult
-                .onSuccess { location ->
-
-                    val weatherResult =
-                        weatherRepository.getCurrentWeather(
-                            latitude = location.latitude,
-                            longitude = location.longitude,
-                            locationName = location.locationName
-                        )
-
-                    weatherResult
-                        .onSuccess { weather ->
-                            weatherData = weather
-                        }
-                        .onFailure {
-                            weatherError = "Unable to load weather."
-                        }
-                }
-                .onFailure {
-                    weatherError = "Unable to determine your location."
-                }
-
-            weatherLoading = false
-        } else {
+        if (latitude == null || longitude == null) {
 
             weatherLoading = false
 
-            if (locationRequested) {
-                weatherError = "Location permission is required for weather."
+            weatherError =
+                if (userProfile == null) {
+                    "Your farm profile is still loading."
+                } else {
+                    "Farm location coordinates are not available. Please update your farm location."
+                }
+
+            return@LaunchedEffect
+        }
+
+        // -----------------------------------------------------
+        // Build a friendly farm location name
+        // -----------------------------------------------------
+
+        val farmLocationName =
+            buildString {
+
+                if (!userProfile.farmLocation.isBlank()) {
+                    append(userProfile.farmLocation.trim())
+                }
+
+                if (
+                    !userProfile.village.isBlank() &&
+                    userProfile.village.trim()
+                        .lowercase() !=
+                    userProfile.farmLocation.trim()
+                        .lowercase()
+                ) {
+
+                    if (isNotEmpty()) {
+                        append(", ")
+                    }
+
+                    append(userProfile.village.trim())
+                }
+
+                if (!userProfile.district.isBlank()) {
+
+                    if (isNotEmpty()) {
+                        append(", ")
+                    }
+
+                    append(userProfile.district.trim())
+                }
+            }.ifBlank {
+                "Your farm"
             }
-        }
+
+        // -----------------------------------------------------
+        // Request WEATHER FOR FARM LOCATION
+        //
+        // NOT phone/device location.
+        // -----------------------------------------------------
+
+        val weatherResult =
+            weatherRepository.getCurrentWeather(
+                latitude = latitude,
+                longitude = longitude,
+                locationName = farmLocationName
+            )
+
+        weatherResult
+            .onSuccess { weather ->
+
+                weatherData = weather
+                weatherError = null
+            }
+            .onFailure {
+
+                weatherData = null
+                weatherError =
+                    "Unable to load weather for your farm."
+            }
+
+        weatherLoading = false
     }
 
     // ---------------------------------------------------------
@@ -190,12 +190,14 @@ fun HomeScreen(
 
     LazyColumn(
         modifier = modifier,
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(
-            bottom = 24.dp
-        )
+        contentPadding =
+            androidx.compose.foundation.layout.PaddingValues(
+                bottom = 24.dp
+            )
     ) {
 
         item {
+
             ScreenHeader(
                 title = "Namaste, " + farmerName + "! 👋",
                 subtitle = "Here is your farm update for today."
@@ -203,6 +205,7 @@ fun HomeScreen(
         }
 
         item {
+
             WeatherHeroCard(
                 weather = weatherData,
                 isLoading = weatherLoading,
@@ -211,11 +214,17 @@ fun HomeScreen(
         }
 
         item {
-            PlantScanBanner(onOpenPlantScan)
+
+            PlantScanBanner(
+                onOpenPlantScan
+            )
         }
 
         item {
-            SectionTitle("Quick actions")
+
+            SectionTitle(
+                "Quick actions"
+            )
 
             QuickActions(
                 onOpenCrops,
@@ -225,6 +234,7 @@ fun HomeScreen(
         }
 
         item {
+
             SectionTitle(
                 "Your crops",
                 action = "View all",
@@ -235,6 +245,7 @@ fun HomeScreen(
         }
 
         item {
+
             SectionTitle(
                 "Today's advisory",
                 action = "View all",
@@ -243,19 +254,24 @@ fun HomeScreen(
 
             AdvisoryCard(
                 advisory = SampleData.advisories.first(),
-                modifier = Modifier.padding(horizontal = 20.dp)
+                modifier = Modifier.padding(
+                    horizontal = 20.dp
+                )
             )
         }
 
         item {
-            Spacer(Modifier.height(16.dp))
+
+            Spacer(
+                Modifier.height(16.dp)
+            )
         }
     }
 }
 
-// -------------------------------------------------------------
+// =============================================================
 // WEATHER CARD
-// -------------------------------------------------------------
+// =============================================================
 
 @Composable
 private fun WeatherHeroCard(
@@ -286,8 +302,10 @@ private fun WeatherHeroCard(
                 if (isLoading) {
 
                     Text(
-                        text = "Current location",
-                        color = Color.White.copy(alpha = 0.82f),
+                        text = "Your farm",
+                        color = Color.White.copy(
+                            alpha = 0.82f
+                        ),
                         style = MaterialTheme.typography.labelLarge
                     )
 
@@ -296,11 +314,13 @@ private fun WeatherHeroCard(
                         color = Color.White,
                         fontSize = 42.sp,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(top = 4.dp)
+                        modifier = Modifier.padding(
+                            top = 4.dp
+                        )
                     )
 
                     Text(
-                        text = "Getting your location",
+                        text = "Getting farm weather",
                         color = Color.White,
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -309,7 +329,9 @@ private fun WeatherHeroCard(
 
                     Text(
                         text = weather.location,
-                        color = Color.White.copy(alpha = 0.82f),
+                        color = Color.White.copy(
+                            alpha = 0.82f
+                        ),
                         style = MaterialTheme.typography.labelLarge
                     )
 
@@ -318,7 +340,9 @@ private fun WeatherHeroCard(
                         color = Color.White,
                         fontSize = 42.sp,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(top = 4.dp)
+                        modifier = Modifier.padding(
+                            top = 4.dp
+                        )
                     )
 
                     Text(
@@ -328,17 +352,24 @@ private fun WeatherHeroCard(
                     )
 
                     Text(
-                        text = "Rain chance ${weather.rainChance}  •  Humidity ${weather.humidity}",
-                        color = Color.White.copy(alpha = 0.82f),
+                        text =
+                            "Rain chance ${weather.rainChance}  •  Humidity ${weather.humidity}",
+                        color = Color.White.copy(
+                            alpha = 0.82f
+                        ),
                         style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(top = 10.dp)
+                        modifier = Modifier.padding(
+                            top = 10.dp
+                        )
                     )
 
                 } else {
 
                     Text(
-                        text = "Current location",
-                        color = Color.White.copy(alpha = 0.82f),
+                        text = "Farm weather",
+                        color = Color.White.copy(
+                            alpha = 0.82f
+                        ),
                         style = MaterialTheme.typography.labelLarge
                     )
 
@@ -347,11 +378,15 @@ private fun WeatherHeroCard(
                         color = Color.White,
                         fontSize = 28.sp,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(top = 4.dp)
+                        modifier = Modifier.padding(
+                            top = 4.dp
+                        )
                     )
 
                     Text(
-                        text = errorMessage ?: "Please try again later.",
+                        text =
+                            errorMessage
+                                ?: "Please update your farm location.",
                         color = Color.White,
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -366,9 +401,9 @@ private fun WeatherHeroCard(
     }
 }
 
-// -------------------------------------------------------------
+// =============================================================
 // PLANT SCAN BANNER
-// -------------------------------------------------------------
+// =============================================================
 
 @Composable
 private fun PlantScanBanner(
@@ -378,11 +413,17 @@ private fun PlantScanBanner(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 16.dp)
-            .clickable(onClick = onOpenPlantScan),
+            .padding(
+                horizontal = 20.dp,
+                vertical = 16.dp
+            )
+            .clickable(
+                onClick = onOpenPlantScan
+            ),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
+            containerColor =
+                MaterialTheme.colorScheme.primaryContainer
         )
     ) {
 
@@ -426,9 +467,9 @@ private fun PlantScanBanner(
     }
 }
 
-// -------------------------------------------------------------
+// =============================================================
 // QUICK ACTIONS
-// -------------------------------------------------------------
+// =============================================================
 
 @Composable
 private fun QuickActions(
@@ -441,7 +482,8 @@ private fun QuickActions(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement =
+            Arrangement.spacedBy(10.dp)
     ) {
 
         QuickAction(
@@ -467,9 +509,9 @@ private fun QuickActions(
     }
 }
 
-// -------------------------------------------------------------
+// =============================================================
 // QUICK ACTION CARD
-// -------------------------------------------------------------
+// =============================================================
 
 @Composable
 private fun QuickAction(
@@ -480,10 +522,13 @@ private fun QuickAction(
 ) {
 
     Card(
-        modifier = modifier.clickable(onClick = onClick),
+        modifier = modifier.clickable(
+            onClick = onClick
+        ),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
+            containerColor =
+                MaterialTheme.colorScheme.surfaceVariant
         )
     ) {
 
@@ -492,7 +537,8 @@ private fun QuickAction(
                 vertical = 14.dp,
                 horizontal = 8.dp
             ),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment =
+                Alignment.CenterHorizontally
         ) {
 
             Text(
@@ -504,20 +550,23 @@ private fun QuickAction(
                 label,
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(top = 5.dp)
+                modifier = Modifier.padding(
+                    top = 5.dp
+                )
             )
         }
     }
 }
 
-// -------------------------------------------------------------
+// =============================================================
 // CROP SUMMARY
-// -------------------------------------------------------------
+// =============================================================
 
 @Composable
 private fun CropSummaryCard() {
 
-    val crop = SampleData.crops.first()
+    val crop =
+        SampleData.crops.first()
 
     Card(
         modifier = Modifier
@@ -531,7 +580,8 @@ private fun CropSummaryCard() {
 
         Row(
             modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment =
+                Alignment.CenterVertically
         ) {
 
             Text(
@@ -563,7 +613,9 @@ private fun CropSummaryCard() {
                     crop.stage,
                     style = MaterialTheme.typography.labelMedium,
                     color = LeafGreen,
-                    modifier = Modifier.padding(top = 4.dp)
+                    modifier = Modifier.padding(
+                        top = 4.dp
+                    )
                 )
             }
 
