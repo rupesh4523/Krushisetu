@@ -1,12 +1,13 @@
 package com.sashya.krushisetu.data.model
 
 data class Crop(
-    val name: String,
-    val variety: String,
-    val stage: String,
-    val area: String,
-    val healthLabel: String,
-    val healthEmoji: String
+    val id: String = "",
+    val name: String = "",
+    val variety: String = "",
+    val stage: String = "",
+    val area: String = "",
+    val healthLabel: String = "",
+    val healthEmoji: String = "🌱"
 )
 
 data class Advisory(
