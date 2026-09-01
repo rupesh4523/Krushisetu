@@ -10,7 +10,6 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.sashya.krushisetu.data.model.UserProfile
 import com.sashya.krushisetu.data.model.UserRole
 
-
 // =============================================================
 // AUTHENTICATION RESULT
 // =============================================================
@@ -27,7 +26,6 @@ sealed interface AuthenticationResult {
     ) : AuthenticationResult
 }
 
-
 // =============================================================
 // FIREBASE AUTH REPOSITORY
 // =============================================================
@@ -43,7 +41,6 @@ class FirebaseAuthRepository(
     private val firebaseApp: FirebaseApp? =
         FirebaseApp.initializeApp(context)
 
-
     // ---------------------------------------------------------
     // Firebase Authentication
     // ---------------------------------------------------------
@@ -52,7 +49,6 @@ class FirebaseAuthRepository(
         firebaseApp?.let {
             FirebaseAuth.getInstance(it)
         }
-
 
     // ---------------------------------------------------------
     // Firebase Firestore
@@ -63,7 +59,6 @@ class FirebaseAuthRepository(
             FirebaseFirestore.getInstance(it)
         }
 
-
     // =========================================================
     // BASIC ACCOUNT INFORMATION
     // =========================================================
@@ -72,16 +67,233 @@ class FirebaseAuthRepository(
         return firebaseAuth?.currentUser != null
     }
 
-
     fun currentUserEmail(): String? {
         return firebaseAuth?.currentUser?.email
     }
-
 
     fun currentUserName(): String? {
         return firebaseAuth?.currentUser?.displayName
     }
 
+    // =========================================================
+    // GET CURRENT USER PROFILE
+    // =========================================================
+
+    fun getCurrentUserProfile(
+        onResult: (Result<UserProfile>) -> Unit
+    ) {
+
+        val auth = firebaseAuth
+
+        if (auth == null) {
+            onResult(
+                Result.failure(
+                    Exception(
+                        FIREBASE_NOT_CONFIGURED_MESSAGE
+                    )
+                )
+            )
+            return
+        }
+
+        val database = firestore
+
+        if (database == null) {
+            onResult(
+                Result.failure(
+                    Exception(
+                        "Database is not connected yet."
+                    )
+                )
+            )
+            return
+        }
+
+        val user = auth.currentUser
+
+        if (user == null) {
+            onResult(
+                Result.failure(
+                    Exception(
+                        "No user is currently signed in."
+                    )
+                )
+            )
+            return
+        }
+
+        database
+            .collection("users")
+            .document(user.uid)
+            .get()
+            .addOnCompleteListener { task ->
+
+                if (!task.isSuccessful) {
+
+                    onResult(
+                        Result.failure(
+                            task.exception
+                                ?: Exception(
+                                    "Unable to load your profile."
+                                )
+                        )
+                    )
+
+                    return@addOnCompleteListener
+                }
+
+                val document = task.result
+
+                if (document == null || !document.exists()) {
+
+                    onResult(
+                        Result.failure(
+                            Exception(
+                                "Your account profile could not be found."
+                            )
+                        )
+                    )
+
+                    return@addOnCompleteListener
+                }
+
+                // -------------------------------------------------
+                // Read role
+                // -------------------------------------------------
+
+                val storedRole =
+                    document.getString("role")
+                        ?.let {
+                            try {
+                                UserRole.valueOf(
+                                    it.uppercase()
+                                )
+                            } catch (
+                                exception: IllegalArgumentException
+                            ) {
+                                UserRole.FARMER
+                            }
+                        }
+                        ?: UserRole.FARMER
+
+                // -------------------------------------------------
+                // Read farm coordinates
+                //
+                // Firestore may return numbers as Long or Double,
+                // so we convert using Number.
+                // -------------------------------------------------
+
+                val farmLatitude =
+                    (document.get("farmLatitude") as? Number)
+                        ?.toDouble()
+
+                val farmLongitude =
+                    (document.get("farmLongitude") as? Number)
+                        ?.toDouble()
+
+                // -------------------------------------------------
+                // Build complete UserProfile
+                // -------------------------------------------------
+
+                val profile = UserProfile(
+
+                    // Common information
+
+                    name =
+                        document.getString("name")
+                            ?: user.displayName
+                            ?: "",
+
+                    email =
+                        document.getString("email")
+                            ?: user.email
+                            ?: "",
+
+                    phone =
+                        document.getString("phone")
+                            ?: "",
+
+                    location =
+                        document.getString("location")
+                            ?: "",
+
+                    role =
+                        storedRole,
+
+                    // -------------------------------------------------
+                    // Farmer information
+                    // -------------------------------------------------
+
+                    village =
+                        document.getString("village")
+                            ?: "",
+
+                    district =
+                        document.getString("district")
+                            ?: "",
+
+                    farmLocation =
+                        document.getString("farmLocation")
+                            ?: "",
+
+                    farmLatitude =
+                        farmLatitude,
+
+                    farmLongitude =
+                        farmLongitude,
+
+                    numberOfFarms =
+                        document.getLong("numberOfFarms")
+                            ?.toInt()
+                            ?: 0,
+
+                    totalAreaAcres =
+                        (document.get("totalAreaAcres") as? Number)
+                            ?.toDouble()
+                            ?: 0.0,
+
+                    // -------------------------------------------------
+                    // Advisor information
+                    // -------------------------------------------------
+
+                    organizationName =
+                        document.getString("organizationName")
+                            ?: "",
+
+                    expertise =
+                        document.getString("expertise")
+                            ?: "",
+
+                    experience =
+                        document.getString("experience")
+                            ?: "",
+
+                    // -------------------------------------------------
+                    // Supplier information
+                    // -------------------------------------------------
+
+                    companyName =
+                        document.getString("companyName")
+                            ?: "",
+
+                    branchLocations =
+                        document.getString("branchLocations")
+                            ?: "",
+
+                    businessType =
+                        document.getString("businessType")
+                            ?: "",
+
+                    contactPerson =
+                        document.getString("contactPerson")
+                            ?: ""
+                )
+
+                onResult(
+                    Result.success(profile)
+                )
+            }
+    }
 
     // =========================================================
     // LOGIN
@@ -97,30 +309,28 @@ class FirebaseAuthRepository(
         val auth = firebaseAuth
 
         if (auth == null) {
+
             onResult(
                 AuthenticationResult.Failure(
                     FIREBASE_NOT_CONFIGURED_MESSAGE
                 )
             )
+
             return
         }
-
 
         val database = firestore
 
         if (database == null) {
+
             onResult(
                 AuthenticationResult.Failure(
                     "Database is not connected yet."
                 )
             )
+
             return
         }
-
-
-        // -----------------------------------------------------
-        // First authenticate using Firebase Authentication
-        // -----------------------------------------------------
 
         auth.signInWithEmailAndPassword(
             email.trim(),
@@ -139,11 +349,6 @@ class FirebaseAuthRepository(
                 return@addOnCompleteListener
             }
 
-
-            // -------------------------------------------------
-            // Get authenticated Firebase user
-            // -------------------------------------------------
-
             val user = auth.currentUser
 
             if (user == null) {
@@ -157,11 +362,6 @@ class FirebaseAuthRepository(
                 return@addOnCompleteListener
             }
 
-
-            // -------------------------------------------------
-            // Load user's profile from Firestore
-            // -------------------------------------------------
-
             database
                 .collection("users")
                 .document(user.uid)
@@ -174,7 +374,8 @@ class FirebaseAuthRepository(
 
                         onResult(
                             AuthenticationResult.Failure(
-                                profileTask.exception?.localizedMessage
+                                profileTask.exception
+                                    ?.localizedMessage
                                     ?: "Unable to load your profile."
                             )
                         )
@@ -182,15 +383,13 @@ class FirebaseAuthRepository(
                         return@addOnCompleteListener
                     }
 
+                    val document =
+                        profileTask.result
 
-                    val document = profileTask.result
-
-
-                    // -------------------------------------------------
-                    // Profile must exist
-                    // -------------------------------------------------
-
-                    if (document == null || !document.exists()) {
+                    if (
+                        document == null ||
+                        !document.exists()
+                    ) {
 
                         auth.signOut()
 
@@ -203,14 +402,8 @@ class FirebaseAuthRepository(
                         return@addOnCompleteListener
                     }
 
-
-                    // -------------------------------------------------
-                    // Get stored role
-                    // -------------------------------------------------
-
                     val storedRole =
                         document.getString("role")
-
 
                     if (storedRole.isNullOrBlank()) {
 
@@ -225,10 +418,9 @@ class FirebaseAuthRepository(
                         return@addOnCompleteListener
                     }
 
-
-                    // =================================================
-                    // CRITICAL ROLE VALIDATION
-                    // =================================================
+                    // -------------------------------------------------
+                    // Validate selected role
+                    // -------------------------------------------------
 
                     if (
                         !storedRole.equals(
@@ -236,14 +428,6 @@ class FirebaseAuthRepository(
                             ignoreCase = true
                         )
                     ) {
-
-                        // ---------------------------------------------
-                        // IMPORTANT:
-                        // Authentication succeeded, but the selected
-                        // role is wrong.
-                        //
-                        // We immediately sign the user out.
-                        // ---------------------------------------------
 
                         auth.signOut()
 
@@ -259,7 +443,6 @@ class FirebaseAuthRepository(
                         return@addOnCompleteListener
                     }
 
-
                     // -------------------------------------------------
                     // Login successful
                     // -------------------------------------------------
@@ -273,7 +456,6 @@ class FirebaseAuthRepository(
                 }
         }
     }
-
 
     // =========================================================
     // REGISTER
@@ -298,7 +480,6 @@ class FirebaseAuthRepository(
             return
         }
 
-
         val database = firestore
 
         if (database == null) {
@@ -311,7 +492,6 @@ class FirebaseAuthRepository(
 
             return
         }
-
 
         // =====================================================
         // CREATE FIREBASE ACCOUNT
@@ -334,11 +514,6 @@ class FirebaseAuthRepository(
                 return@addOnCompleteListener
             }
 
-
-            // -------------------------------------------------
-            // Get newly created user
-            // -------------------------------------------------
-
             val user = auth.currentUser
 
             if (user == null) {
@@ -351,7 +526,6 @@ class FirebaseAuthRepository(
 
                 return@addOnCompleteListener
             }
-
 
             // =================================================
             // DETERMINE DISPLAY NAME
@@ -373,7 +547,6 @@ class FirebaseAuthRepository(
                         profile.email.substringBefore("@")
                 }
 
-
             // =================================================
             // SAVE DISPLAY NAME IN FIREBASE AUTH
             // =================================================
@@ -383,7 +556,6 @@ class FirebaseAuthRepository(
                     .setDisplayName(displayName)
                     .build()
 
-
             user.updateProfile(authProfile)
                 .addOnCompleteListener { profileTask ->
 
@@ -391,7 +563,8 @@ class FirebaseAuthRepository(
 
                         onResult(
                             AuthenticationResult.Failure(
-                                profileTask.exception?.localizedMessage
+                                profileTask.exception
+                                    ?.localizedMessage
                                     ?: "Account was created, but the profile name could not be saved."
                             )
                         )
@@ -399,13 +572,12 @@ class FirebaseAuthRepository(
                         return@addOnCompleteListener
                     }
 
-
                     // =================================================
                     // SAVE USER PROFILE IN FIRESTORE
                     // =================================================
 
                     val profileData =
-                        hashMapOf(
+                        hashMapOf<String, Any?>(
 
                             // -----------------------------------------
                             // Common
@@ -413,8 +585,6 @@ class FirebaseAuthRepository(
 
                             "uid" to user.uid,
 
-                            // IMPORTANT:
-                            // Firestore stores this as String
                             "role" to profile.role.name,
 
                             "name" to displayName,
@@ -424,7 +594,6 @@ class FirebaseAuthRepository(
                             "phone" to profile.phone.trim(),
 
                             "location" to profile.location.trim(),
-
 
                             // -----------------------------------------
                             // Farmer
@@ -436,10 +605,17 @@ class FirebaseAuthRepository(
 
                             "farmLocation" to profile.farmLocation.trim(),
 
+                            // IMPORTANT:
+                            // These are the coordinates that HomeScreen
+                            // will use for weather.
+
+                            "farmLatitude" to profile.farmLatitude,
+
+                            "farmLongitude" to profile.farmLongitude,
+
                             "numberOfFarms" to profile.numberOfFarms,
 
                             "totalAreaAcres" to profile.totalAreaAcres,
-
 
                             // -----------------------------------------
                             // Advisor
@@ -453,7 +629,6 @@ class FirebaseAuthRepository(
 
                             "experience" to
                                     profile.experience.trim(),
-
 
                             // -----------------------------------------
                             // Supplier
@@ -472,7 +647,6 @@ class FirebaseAuthRepository(
                                     profile.contactPerson.trim()
                         )
 
-
                     database
                         .collection("users")
                         .document(user.uid)
@@ -484,8 +658,6 @@ class FirebaseAuthRepository(
                                 onResult(
                                     AuthenticationResult.Success(
                                         displayName = displayName,
-
-                                        // Return actual stored role
                                         role = profile.role.name
                                     )
                                 )
@@ -494,7 +666,8 @@ class FirebaseAuthRepository(
 
                                 onResult(
                                     AuthenticationResult.Failure(
-                                        firestoreTask.exception?.localizedMessage
+                                        firestoreTask.exception
+                                            ?.localizedMessage
                                             ?: "Account created, but your profile could not be saved."
                                     )
                                 )
@@ -504,7 +677,6 @@ class FirebaseAuthRepository(
         }
     }
 
-
     // =========================================================
     // SIGN OUT
     // =========================================================
@@ -512,7 +684,6 @@ class FirebaseAuthRepository(
     fun signOut() {
         firebaseAuth?.signOut()
     }
-
 
     // =========================================================
     // HELPER: FORMAT ROLE
@@ -537,7 +708,6 @@ class FirebaseAuthRepository(
                 role
         }
     }
-
 
     // =========================================================
     // CONSTANTS

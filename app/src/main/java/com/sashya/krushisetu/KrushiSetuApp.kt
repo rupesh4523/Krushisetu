@@ -1,18 +1,22 @@
 package com.sashya.krushisetu
 
+import android.content.Context
+
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 
 import com.sashya.krushisetu.data.auth.FirebaseAuthRepository
+import com.sashya.krushisetu.data.model.UserProfile
 import com.sashya.krushisetu.data.model.UserRole
 
 import com.sashya.krushisetu.feature.advisory.AdvisoryScreen
@@ -37,112 +41,277 @@ import com.sashya.krushisetu.feature.supplier.SupplierProfileScreen
 import com.sashya.krushisetu.ui.components.KrushiBottomBar
 import com.sashya.krushisetu.ui.navigation.AppDestination
 
-
 private enum class AppEntry {
     WELCOME,
     AUTHENTICATION,
     APP
 }
 
-
 @Composable
 fun KrushiSetuApp() {
 
     val context = LocalContext.current
 
-    val authRepository = remember {
-        FirebaseAuthRepository(context.applicationContext)
-    }
+    val authRepository =
+        remember {
+            FirebaseAuthRepository(
+                context.applicationContext
+            )
+        }
+
+    // =========================================================
+    // ROLE PREFERENCES
+    // =========================================================
+
+    val rolePreferences =
+        remember {
+
+            context.getSharedPreferences(
+                "krushisetu_preferences",
+                Context.MODE_PRIVATE
+            )
+        }
+
+    // =========================================================
+    // APP ENTRY
+    // =========================================================
 
     var appEntryName by remember {
+
         mutableStateOf(
+
             if (authRepository.isUserSignedIn()) {
+
                 AppEntry.APP.name
+
             } else {
+
                 AppEntry.WELCOME.name
             }
         )
     }
 
+    // =========================================================
+    // FARMER DESTINATION
+    // =========================================================
+
     var destinationName by remember {
-        mutableStateOf(AppDestination.HOME.name)
+
+        mutableStateOf(
+            AppDestination.HOME.name
+        )
     }
+
+    // =========================================================
+    // USER ROLE
+    // =========================================================
 
     var userRoleName by remember {
-        mutableStateOf(UserRole.FARMER.name)
+
+        mutableStateOf(
+
+            rolePreferences.getString(
+                "user_role",
+                UserRole.FARMER.name
+            ) ?: UserRole.FARMER.name
+        )
     }
+
+    // =========================================================
+    // CURRENT USER PROFILE
+    // =========================================================
+
+    var currentUserProfile by remember {
+
+        mutableStateOf<UserProfile?>(null)
+    }
+
+    // =========================================================
+    // LOAD CURRENT USER PROFILE
+    // =========================================================
+
+    LaunchedEffect(
+        appEntryName,
+        userRoleName
+    ) {
+
+        if (
+            appEntryName == AppEntry.APP.name &&
+            authRepository.isUserSignedIn()
+        ) {
+
+            authRepository.getCurrentUserProfile { result ->
+
+                result.onSuccess { profile ->
+
+                    currentUserProfile =
+                        profile
+                }
+            }
+        }
+    }
+
+    // =========================================================
+    // SUPPLIER SCREEN
+    // =========================================================
 
     var supplierScreen by remember {
-        mutableStateOf("DASHBOARD")
+
+        mutableStateOf(
+            "DASHBOARD"
+        )
     }
 
-    val appEntry = AppEntry.valueOf(appEntryName)
+    // =========================================================
+    // CONVERT STRING STATES
+    // =========================================================
 
-    val destination = AppDestination.valueOf(destinationName)
+    val appEntry =
+        AppEntry.valueOf(appEntryName)
 
+    val destination =
+        AppDestination.valueOf(destinationName)
+
+    // =========================================================
+    // MAIN APPLICATION FLOW
+    // =========================================================
 
     when (appEntry) {
 
-        // =========================================================
+        // =====================================================
         // WELCOME
-        // =========================================================
+        // =====================================================
 
         AppEntry.WELCOME -> WelcomeScreen(
 
             onStart = {
-                appEntryName = AppEntry.AUTHENTICATION.name
+
+                appEntryName =
+                    AppEntry.AUTHENTICATION.name
             },
 
             onExploreAsGuest = {
-                appEntryName = AppEntry.APP.name
+
+                userRoleName =
+                    UserRole.FARMER.name
+
+                destinationName =
+                    AppDestination.HOME.name
+
+                appEntryName =
+                    AppEntry.APP.name
             }
         )
 
-
-        // =========================================================
+        // =====================================================
         // AUTHENTICATION
-        // =========================================================
+        // =====================================================
 
         AppEntry.AUTHENTICATION -> AuthenticationScreen(
 
             authRepository = authRepository,
 
-            onAuthenticated = {
-                appEntryName = AppEntry.APP.name
-                userRoleName = it
+            onAuthenticated = { role ->
+
+                userRoleName =
+                    when (role.uppercase()) {
+
+                        UserRole.FARMER.name ->
+                            UserRole.FARMER.name
+
+                        UserRole.ADVISOR.name ->
+                            UserRole.ADVISOR.name
+
+                        UserRole.SUPPLIER.name ->
+                            UserRole.SUPPLIER.name
+
+                        else ->
+                            UserRole.FARMER.name
+                    }
+
+                rolePreferences
+                    .edit()
+                    .putString(
+                        "user_role",
+                        userRoleName
+                    )
+                    .apply()
+
+                destinationName =
+                    AppDestination.HOME.name
+
+                supplierScreen =
+                    "DASHBOARD"
+
+                // -------------------------------------------------
+                // Important:
+                // Load the newly authenticated user's profile
+                // immediately so HomeScreen gets farm coordinates.
+                // -------------------------------------------------
+
+                authRepository.getCurrentUserProfile { result ->
+
+                    result.onSuccess { profile ->
+
+                        currentUserProfile =
+                            profile
+                    }
+                }
+
+                appEntryName =
+                    AppEntry.APP.name
             },
 
             onContinueAsGuest = {
-                appEntryName = AppEntry.APP.name
+
+                userRoleName =
+                    UserRole.FARMER.name
+
+                destinationName =
+                    AppDestination.HOME.name
+
+                supplierScreen =
+                    "DASHBOARD"
+
+                currentUserProfile =
+                    null
+
+                appEntryName =
+                    AppEntry.APP.name
             }
         )
 
-
-        // =========================================================
+        // =====================================================
         // MAIN APPLICATION
-        // =========================================================
+        // =====================================================
 
         AppEntry.APP -> {
 
-            val userRole = UserRole.valueOf(userRoleName)
+            val userRole =
+                UserRole.valueOf(userRoleName)
 
             when (userRole) {
 
-
-                // =====================================================
+                // =================================================
                 // FARMER
-                // =====================================================
+                // =================================================
 
                 UserRole.FARMER -> Scaffold(
+
+                    modifier =
+                        Modifier.fillMaxSize(),
 
                     bottomBar = {
 
                         KrushiBottomBar(
 
-                            currentDestination = destination,
+                            currentDestination =
+                                destination,
 
                             onDestinationSelected = {
-                                destinationName = it.name
+
+                                destinationName =
+                                    it.name
                             }
                         )
                     }
@@ -151,106 +320,182 @@ fun KrushiSetuApp() {
 
                     when (destination) {
 
+                        // =========================================
+                        // FARMER HOME
+                        // =========================================
+
                         AppDestination.HOME -> HomeScreen(
 
-                            modifier = Modifier.padding(innerPadding),
+                            modifier =
+                                Modifier.padding(
+                                    innerPadding
+                                ),
 
                             farmerName =
                                 authRepository.currentUserName()
+                                    ?: currentUserProfile?.name
                                     ?: "Farmer",
 
+                            // =====================================
+                            // THIS IS THE IMPORTANT NEW PARAMETER
+                            // =====================================
+
+                            userProfile =
+                                currentUserProfile,
+
                             onOpenCrops = {
+
                                 destinationName =
                                     AppDestination.CROPS.name
                             },
 
                             onOpenAdvisory = {
+
                                 destinationName =
                                     AppDestination.ADVISORY.name
                             },
 
                             onOpenPlantScan = {
+
                                 destinationName =
                                     AppDestination.PLANT_SCAN.name
                             },
 
                             onOpenConsultation = {
+
                                 destinationName =
                                     AppDestination.CONSULTATION.name
                             }
                         )
 
+                        // =========================================
+                        // FARMER CROPS
+                        // =========================================
 
-                        AppDestination.CROPS -> CropsScreen(
-                            modifier = Modifier.padding(innerPadding)
-                        )
+                        AppDestination.CROPS ->
+                            CropsScreen(
 
+                                modifier =
+                                    Modifier.padding(
+                                        innerPadding
+                                    )
+                            )
 
-                        AppDestination.ADVISORY -> AdvisoryScreen(
+                        // =========================================
+                        // FARMER ADVISORY
+                        // =========================================
 
-                            modifier = Modifier.padding(innerPadding),
+                        AppDestination.ADVISORY ->
+                            AdvisoryScreen(
 
-                            onOpenPlantScan = {
-                                destinationName =
-                                    AppDestination.PLANT_SCAN.name
-                            }
-                        )
+                                modifier =
+                                    Modifier.padding(
+                                        innerPadding
+                                    ),
 
+                                onOpenPlantScan = {
 
-                        AppDestination.PLANT_SCAN -> PlantScanScreen(
+                                    destinationName =
+                                        AppDestination.PLANT_SCAN.name
+                                }
+                            )
 
-                            modifier = Modifier.padding(innerPadding),
+                        // =========================================
+                        // FARMER PLANT SCAN
+                        // =========================================
 
-                            onOpenConsultation = {
-                                destinationName =
-                                    AppDestination.CONSULTATION.name
-                            }
-                        )
+                        AppDestination.PLANT_SCAN ->
+                            PlantScanScreen(
 
+                                modifier =
+                                    Modifier.padding(
+                                        innerPadding
+                                    ),
 
-                        AppDestination.CONSULTATION -> ConsultationScreen(
-                            modifier = Modifier.padding(innerPadding)
-                        )
+                                onOpenConsultation = {
 
+                                    destinationName =
+                                        AppDestination.CONSULTATION.name
+                                }
+                            )
 
-                        AppDestination.PROFILE -> ProfileScreen(
+                        // =========================================
+                        // FARMER CONSULTATION
+                        // =========================================
 
-                            modifier = Modifier.padding(innerPadding),
+                        AppDestination.CONSULTATION ->
+                            ConsultationScreen(
 
-                            signedInName =
-                                authRepository.currentUserName(),
+                                modifier =
+                                    Modifier.padding(
+                                        innerPadding
+                                    )
+                            )
 
-                            signedInEmail =
-                                authRepository.currentUserEmail(),
+                        // =========================================
+                        // FARMER PROFILE
+                        // =========================================
 
-                            onSignOut = {
+                        AppDestination.PROFILE ->
+                            ProfileScreen(
 
-                                authRepository.signOut()
+                                modifier =
+                                    Modifier.padding(
+                                        innerPadding
+                                    ),
 
-                                appEntryName =
-                                    AppEntry.AUTHENTICATION.name
-                            },
+                                userProfile =
+                                    currentUserProfile,
 
-                            onOpenLogin = {
+                                signedInName =
+                                    authRepository.currentUserName(),
 
-                                appEntryName =
-                                    AppEntry.AUTHENTICATION.name
-                            }
-                        )
+                                signedInEmail =
+                                    authRepository.currentUserEmail(),
+
+                                onSignOut = {
+
+                                    authRepository.signOut()
+
+                                    rolePreferences
+                                        .edit()
+                                        .remove("user_role")
+                                        .apply()
+
+                                    userRoleName =
+                                        UserRole.FARMER.name
+
+                                    currentUserProfile =
+                                        null
+
+                                    destinationName =
+                                        AppDestination.HOME.name
+
+                                    appEntryName =
+                                        AppEntry.AUTHENTICATION.name
+                                },
+
+                                onOpenLogin = {
+
+                                    appEntryName =
+                                        AppEntry.AUTHENTICATION.name
+                                }
+                            )
                     }
                 }
 
-
-                // =====================================================
+                // =================================================
                 // ADVISOR
-                // =====================================================
+                // =================================================
 
-                UserRole.ADVISOR -> AdvisorDashboardScreen()
+                UserRole.ADVISOR -> {
 
+                    AdvisorDashboardScreen()
+                }
 
-                // =====================================================
+                // =================================================
                 // SUPPLIER
-                // =====================================================
+                // =================================================
 
                 UserRole.SUPPLIER -> Scaffold(
 
@@ -259,23 +504,33 @@ fun KrushiSetuApp() {
                         SupplierBottomBar(
 
                             onHome = {
-                                supplierScreen = "DASHBOARD"
+
+                                supplierScreen =
+                                    "DASHBOARD"
                             },
 
                             onProducts = {
-                                supplierScreen = "PRODUCTS"
+
+                                supplierScreen =
+                                    "PRODUCTS"
                             },
 
                             onOrders = {
-                                supplierScreen = "ORDERS"
+
+                                supplierScreen =
+                                    "ORDERS"
                             },
 
                             onDelivery = {
-                                supplierScreen = "DELIVERY"
+
+                                supplierScreen =
+                                    "DELIVERY"
                             },
 
                             onPayments = {
-                                supplierScreen = "PAYMENTS"
+
+                                supplierScreen =
+                                    "PAYMENTS"
                             }
                         )
                     }
@@ -285,122 +540,173 @@ fun KrushiSetuApp() {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(innerPadding)
+                            .padding(
+                                innerPadding
+                            )
                     ) {
 
                         when (supplierScreen) {
 
-
-                            // =========================================
+                            // =====================================
                             // SUPPLIER DASHBOARD
-                            // =========================================
+                            // =====================================
 
-                            "DASHBOARD" -> SupplierDashboardScreen(
+                            "DASHBOARD" ->
+                                SupplierDashboardScreen(
 
-                                supplierName =
-                                    authRepository.currentUserName()
-                                        ?: "Supplier",
+                                    supplierName =
+                                        authRepository.currentUserName()
+                                            ?: "Supplier",
 
-                                onOpenProfile = {
-                                    supplierScreen = "PROFILE"
-                                },
+                                    onOpenProfile = {
 
-                                onOpenProducts = {
-                                    supplierScreen = "PRODUCTS"
-                                },
+                                        supplierScreen =
+                                            "PROFILE"
+                                    },
 
-                                onOpenOrders = {
-                                    supplierScreen = "ORDERS"
-                                },
+                                    onOpenProducts = {
 
-                                onOpenDelivery = {
-                                    supplierScreen = "DELIVERY"
-                                },
+                                        supplierScreen =
+                                            "PRODUCTS"
+                                    },
 
-                                onOpenPayments = {
-                                    supplierScreen = "PAYMENTS"
-                                },
+                                    onOpenOrders = {
 
-                                onOpenAnalytics = {
-                                    supplierScreen = "ANALYTICS"
-                                }
-                            )
+                                        supplierScreen =
+                                            "ORDERS"
+                                    },
 
+                                    onOpenDelivery = {
 
-                            // =========================================
-                            // PRODUCTS
-                            // =========================================
+                                        supplierScreen =
+                                            "DELIVERY"
+                                    },
 
-                            "PRODUCTS" -> SupplierProductsScreen(
+                                    onOpenPayments = {
 
-                                onBack = {
-                                    supplierScreen = "DASHBOARD"
-                                }
-                            )
+                                        supplierScreen =
+                                            "PAYMENTS"
+                                    },
 
+                                    onOpenAnalytics = {
 
-                            // =========================================
-                            // PROFILE
-                            // =========================================
+                                        supplierScreen =
+                                            "ANALYTICS"
+                                    }
+                                )
 
-                            "PROFILE" -> SupplierProfileScreen(
+                            // =====================================
+                            // SUPPLIER PRODUCTS
+                            // =====================================
 
-                                supplierName =
-                                    authRepository.currentUserName()
-                                        ?: "Supplier",
+                            "PRODUCTS" ->
+                                SupplierProductsScreen(
 
-                                onBack = {
-                                    supplierScreen = "DASHBOARD"
-                                }
-                            )
+                                    onBack = {
 
+                                        supplierScreen =
+                                            "DASHBOARD"
+                                    }
+                                )
 
-                            // =========================================
-                            // ORDERS
-                            // =========================================
+                            // =====================================
+                            // SUPPLIER PROFILE
+                            // =====================================
 
-                            "ORDERS" -> SupplierOrdersScreen(
+                            "PROFILE" ->
+                                SupplierProfileScreen(
 
-                                onBack = {
-                                    supplierScreen = "DASHBOARD"
-                                }
-                            )
+                                    supplierName =
+                                        authRepository.currentUserName()
+                                            ?: "Supplier",
 
+                                    onBack = {
 
-                            // =========================================
-                            // DELIVERY
-                            // =========================================
+                                        supplierScreen =
+                                            "DASHBOARD"
+                                    },
 
-                            "DELIVERY" -> SupplierDeliveryScreen(
+                                    onSignOut = {
 
-                                onBack = {
-                                    supplierScreen = "DASHBOARD"
-                                }
-                            )
+                                        authRepository.signOut()
 
+                                        rolePreferences
+                                            .edit()
+                                            .remove("user_role")
+                                            .apply()
 
-                            // =========================================
-                            // PAYMENTS
-                            // =========================================
+                                        userRoleName =
+                                            UserRole.FARMER.name
 
-                            "PAYMENTS" -> SupplierPaymentsScreen(
+                                        supplierScreen =
+                                            "DASHBOARD"
 
-                                onBack = {
-                                    supplierScreen = "DASHBOARD"
-                                }
-                            )
+                                        destinationName =
+                                            AppDestination.HOME.name
 
+                                        currentUserProfile =
+                                            null
 
-                            // =========================================
-                            // ANALYTICS
-                            // =========================================
+                                        appEntryName =
+                                            AppEntry.AUTHENTICATION.name
+                                    }
+                                )
 
-                            "ANALYTICS" -> SupplierAnalyticsScreen(
+                            // =====================================
+                            // SUPPLIER ORDERS
+                            // =====================================
 
-                                onBack = {
-                                    supplierScreen = "DASHBOARD"
-                                }
-                            )
+                            "ORDERS" ->
+                                SupplierOrdersScreen(
+
+                                    onBack = {
+
+                                        supplierScreen =
+                                            "DASHBOARD"
+                                    }
+                                )
+
+                            // =====================================
+                            // SUPPLIER DELIVERY
+                            // =====================================
+
+                            "DELIVERY" ->
+                                SupplierDeliveryScreen(
+
+                                    onBack = {
+
+                                        supplierScreen =
+                                            "DASHBOARD"
+                                    }
+                                )
+
+                            // =====================================
+                            // SUPPLIER PAYMENTS
+                            // =====================================
+
+                            "PAYMENTS" ->
+                                SupplierPaymentsScreen(
+
+                                    onBack = {
+
+                                        supplierScreen =
+                                            "DASHBOARD"
+                                    }
+                                )
+
+                            // =====================================
+                            // SUPPLIER ANALYTICS
+                            // =====================================
+
+                            "ANALYTICS" ->
+                                SupplierAnalyticsScreen(
+
+                                    onBack = {
+
+                                        supplierScreen =
+                                            "DASHBOARD"
+                                    }
+                                )
                         }
                     }
                 }

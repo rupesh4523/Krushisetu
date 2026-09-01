@@ -21,6 +21,8 @@ data class UserProfile(
     val village: String = "",
     val district: String = "",
     val farmLocation: String = "",
+    val farmLatitude: Double? = null,
+    val farmLongitude: Double? = null,
     val numberOfFarms: Int = 0,
     val totalAreaAcres: Double = 0.0,
 

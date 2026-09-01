@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.sashya.krushisetu.data.model.UserProfile
 import com.sashya.krushisetu.ui.components.ScreenHeader
 import com.sashya.krushisetu.ui.theme.LightLeafGreen
 import com.sashya.krushisetu.ui.theme.MutedText
@@ -28,112 +29,370 @@ import com.sashya.krushisetu.ui.theme.MutedText
 @Composable
 fun ProfileScreen(
     modifier: Modifier = Modifier,
+    userProfile: UserProfile?,
     signedInName: String?,
     signedInEmail: String?,
     onSignOut: () -> Unit,
     onOpenLogin: () -> Unit
 ) {
+
     LazyColumn(
         modifier = modifier,
-        contentPadding = PaddingValues(bottom = 24.dp)
+        contentPadding = PaddingValues(
+            bottom = 24.dp
+        )
     ) {
+
+        // ---------------------------------------------------------
+        // HEADER
+        // ---------------------------------------------------------
+
         item {
+
             ScreenHeader(
                 title = "My profile ☺",
                 subtitle = "Your farmer and farm details."
             )
         }
-        item { FarmerProfileCard(signedInName, signedInEmail) }
+
+
+        // ---------------------------------------------------------
+        // FARMER PROFILE CARD
+        // ---------------------------------------------------------
+
         item {
+
+            FarmerProfileCard(
+                signedInName = signedInName,
+                signedInEmail = signedInEmail
+            )
+        }
+
+
+        // ---------------------------------------------------------
+        // PERSONAL DETAILS
+        // ---------------------------------------------------------
+
+        item {
+
+            Text(
+                text = "Personal details",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(
+                    horizontal = 20.dp,
+                    vertical = 16.dp
+                )
+            )
+        }
+
+
+        item {
+
+            ProfileDetail(
+                emoji = "📧",
+                title = "Email",
+                value =
+                    userProfile?.email
+                        ?.takeIf { it.isNotBlank() }
+                        ?: signedInEmail
+                        ?: "Not available"
+            )
+        }
+
+
+        item {
+
+            ProfileDetail(
+                emoji = "☎",
+                title = "Phone number",
+                value =
+                    userProfile?.phone
+                        ?.takeIf { it.isNotBlank() }
+                        ?: "Not added"
+            )
+        }
+
+
+        // ---------------------------------------------------------
+        // FARM DETAILS
+        // ---------------------------------------------------------
+
+        item {
+
             Text(
                 text = "Farm details",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)
+                modifier = Modifier.padding(
+                    horizontal = 20.dp,
+                    vertical = 16.dp
+                )
             )
         }
-        item { ProfileDetail("📍", "Location", "Baramati, Pune, Maharashtra") }
-        item { ProfileDetail("🌾", "Farm size", "3.5 acres") }
-        item { ProfileDetail("🗣️", "Preferred language", "Marathi") }
-        item { ProfileDetail("☎", "Phone number", "+91 98765 43210") }
+
+
         item {
+
+            ProfileDetail(
+                emoji = "🏘️",
+                title = "Village",
+                value =
+                    userProfile?.village
+                        ?.takeIf { it.isNotBlank() }
+                        ?: "Not added"
+            )
+        }
+
+
+        item {
+
+            ProfileDetail(
+                emoji = "📍",
+                title = "District",
+                value =
+                    userProfile?.district
+                        ?.takeIf { it.isNotBlank() }
+                        ?: "Not added"
+            )
+        }
+
+
+        item {
+
+            ProfileDetail(
+                emoji = "🌾",
+                title = "Farm location",
+                value =
+                    userProfile?.farmLocation
+                        ?.takeIf { it.isNotBlank() }
+                        ?: "Not added"
+            )
+        }
+
+
+        item {
+
+            ProfileDetail(
+                emoji = "🚜",
+                title = "Number of farms",
+                value =
+                    if (
+                        userProfile != null &&
+                        userProfile.numberOfFarms > 0
+                    ) {
+                        userProfile.numberOfFarms.toString()
+                    } else {
+                        "Not added"
+                    }
+            )
+        }
+
+
+        item {
+
+            ProfileDetail(
+                emoji = "📐",
+                title = "Total farm area",
+                value =
+                    if (
+                        userProfile != null &&
+                        userProfile.totalAreaAcres > 0
+                    ) {
+                        "${userProfile.totalAreaAcres} acres"
+                    } else {
+                        "Not added"
+                    }
+            )
+        }
+
+
+        // ---------------------------------------------------------
+        // LOCATION
+        // ---------------------------------------------------------
+
+        item {
+
+            ProfileDetail(
+                emoji = "🗺️",
+                title = "Registered location",
+                value =
+                    userProfile?.location
+                        ?.takeIf { it.isNotBlank() }
+                        ?: "Not added"
+            )
+        }
+
+
+        // ---------------------------------------------------------
+        // SIGN OUT
+        // ---------------------------------------------------------
+
+        item {
+
             if (signedInEmail != null) {
+
                 OutlinedButton(
                     onClick = onSignOut,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                        .padding(
+                            horizontal = 20.dp,
+                            vertical = 16.dp
+                        ),
                     shape = RoundedCornerShape(14.dp)
                 ) {
-                    Text("Sign out")
+
+                    Text(
+                        text = "Sign out"
+                    )
                 }
+
             } else {
+
                 OutlinedButton(
                     onClick = onOpenLogin,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                        .padding(
+                            horizontal = 20.dp,
+                            vertical = 16.dp
+                        ),
                     shape = RoundedCornerShape(14.dp)
                 ) {
-                    Text("Sign in to save your profile")
+
+                    Text(
+                        text = "Sign in to save your profile"
+                    )
                 }
             }
         }
     }
 }
+
+
+// =============================================================
+// FARMER PROFILE CARD
+// =============================================================
 
 @Composable
 private fun FarmerProfileCard(
     signedInName: String?,
     signedInEmail: String?
 ) {
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp),
+            .padding(
+                horizontal = 20.dp
+            ),
         shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = LightLeafGreen)
+        colors = CardDefaults.cardColors(
+            containerColor = LightLeafGreen
+        )
     ) {
+
         Row(
             modifier = Modifier.padding(20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("👨🏽‍🌾", fontSize = 48.sp)
-            Spacer(Modifier.width(14.dp))
+
+            Text(
+                text = "👨🏽‍🌾",
+                fontSize = 48.sp
+            )
+
+            Spacer(
+                modifier = Modifier.width(14.dp)
+            )
+
             Column {
+
                 Text(
-                    signedInName?.takeIf { it.isNotBlank() } ?: "Suresh Patil",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
+                    text =
+                        signedInName
+                            ?.takeIf {
+                                it.isNotBlank()
+                            }
+                            ?: "Farmer",
+
+                    style =
+                        MaterialTheme.typography.titleLarge,
+
+                    fontWeight =
+                        FontWeight.Bold
                 )
+
+
                 Text(
-                    signedInEmail ?: "Guest mode • Farmer since 2008",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MutedText
+                    text =
+                        signedInEmail
+                            ?: "Farmer account",
+
+                    style =
+                        MaterialTheme.typography.bodyMedium,
+
+                    color =
+                        MutedText
                 )
             }
         }
     }
 }
 
+
+// =============================================================
+// PROFILE DETAIL
+// =============================================================
+
 @Composable
-private fun ProfileDetail(emoji: String, title: String, value: String) {
+private fun ProfileDetail(
+    emoji: String,
+    title: String,
+    value: String
+) {
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 5.dp),
+            .padding(
+                horizontal = 20.dp,
+                vertical = 5.dp
+            ),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        )
     ) {
+
         Row(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(emoji, fontSize = 22.sp)
-            Spacer(Modifier.width(12.dp))
+
+            Text(
+                text = emoji,
+                fontSize = 22.sp
+            )
+
+            Spacer(
+                modifier = Modifier.width(12.dp)
+            )
+
             Column {
-                Text(title, style = MaterialTheme.typography.labelMedium, color = MutedText)
-                Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MutedText
+                )
+
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
         }
     }
