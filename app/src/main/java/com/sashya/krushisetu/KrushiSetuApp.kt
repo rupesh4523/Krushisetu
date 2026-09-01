@@ -40,6 +40,11 @@ import com.sashya.krushisetu.feature.supplier.SupplierProfileScreen
 
 import com.sashya.krushisetu.ui.components.KrushiBottomBar
 import com.sashya.krushisetu.ui.navigation.AppDestination
+import com.sashya.krushisetu.feature.advisory.AdvisorBottomBar
+import  com.sashya.krushisetu.feature.advisory.AdvisorFarmersScreen
+import com.sashya.krushisetu.feature.advisory.AdvisorConsultationsScreen
+import com.sashya.krushisetu.feature.advisory.AdvisorScheduleScreen
+import com.sashya.krushisetu.feature.advisory.AdvisorProfileScreen
 
 private enum class AppEntry {
     WELCOME,
@@ -490,7 +495,83 @@ fun KrushiSetuApp() {
 
                 UserRole.ADVISOR -> {
 
-                    AdvisorDashboardScreen()
+                    var advisorScreen by remember {
+                        mutableStateOf("HOME")
+                    }
+
+                    Scaffold(
+
+                        bottomBar = {
+
+                            AdvisorBottomBar(
+
+                                selectedTab = advisorScreen,
+
+                                onHome = {
+                                    advisorScreen = "HOME"
+                                },
+
+                                onFarmers = {
+                                    advisorScreen = "FARMERS"
+                                },
+
+                                onConsultations = {
+                                    advisorScreen = "CONSULTATIONS"
+                                },
+
+                                onSchedule = {
+                                    advisorScreen = "SCHEDULE"
+                                },
+
+                                onProfile = {
+                                    advisorScreen = "PROFILE"
+                                }
+                            )
+                        }
+
+                    ) { innerPadding ->
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(innerPadding)
+                        ) {
+
+                            when (advisorScreen) {
+
+                                "HOME" -> AdvisorDashboardScreen(
+                                    advisorName =
+                                        authRepository.currentUserName()
+                                            ?: "Advisor",
+
+                                    onLogout = {
+                                        authRepository.signOut()
+                                        appEntryName =
+                                            AppEntry.AUTHENTICATION.name
+                                    }
+                                )
+
+                                "FARMERS" -> AdvisorFarmersScreen()
+                                "CONSULTATIONS" -> AdvisorConsultationsScreen()
+                                "SCHEDULE" -> AdvisorScheduleScreen()
+
+                                "PROFILE" -> AdvisorProfileScreen(
+                                    advisorName =
+                                        authRepository.currentUserName()
+                                            ?: "Advisor",
+
+                                    advisorEmail =
+                                        authRepository.currentUserEmail(),
+
+                                    onLogout = {
+                                        authRepository.signOut()
+                                        appEntryName =
+                                            AppEntry.AUTHENTICATION.name
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
 
                 // =================================================
