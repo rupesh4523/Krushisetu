@@ -32,8 +32,9 @@ import com.sashya.krushisetu.ui.theme.MutedText
 @Composable
 fun AdvisorDashboardScreen(
     advisorName: String,
-    onLogout: () -> Unit
-) {
+    onLogout: () -> Unit,
+    onOpenConsultations: () -> Unit
+){
 
     LazyColumn(
         modifier = Modifier
@@ -132,9 +133,7 @@ fun AdvisorDashboardScreen(
                     )
 
                     Button(
-                        onClick = {
-                            // Consultation functionality will be connected later
-                        },
+                        onClick = onOpenConsultations,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color.White,
                             contentColor = LeafGreen

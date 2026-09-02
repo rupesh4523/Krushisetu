@@ -42,7 +42,10 @@ private data class AdvisorFarmer(
 )
 
 @Composable
-fun AdvisorFarmersScreen() {
+private fun FarmerListItem(
+    farmer: AdvisorFarmer,
+    onOpenFarmer: (String, String, String) -> Unit
+)   {
 
     var searchText by remember {
         mutableStateOf("")
@@ -99,8 +102,24 @@ fun AdvisorFarmersScreen() {
             .padding(horizontal = 20.dp)
     ) {
 
+        TextButton(
+            onClick = {
+                onOpenFarmer(
+                    farmer.name,
+                    farmer.location,
+                    farmer.crop
+                )
+            }
+        ) {
+            Text(
+                text = "›",
+                style = MaterialTheme.typography.headlineSmall,
+                color = LeafGreen
+            )
+        }
+
         Spacer(
-            modifier = Modifier.height(16.dp)
+            modifier = Modifier.height(4.dp)
         )
 
         // ---------------------------------------------------------
@@ -196,7 +215,8 @@ fun AdvisorFarmersScreen() {
             items(filteredFarmers) { farmer ->
 
                 FarmerListItem(
-                    farmer = farmer
+                    farmer = farmer,
+                    onOpenFarmer = onOpenFarmer
                 )
             }
 

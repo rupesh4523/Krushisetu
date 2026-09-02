@@ -41,11 +41,11 @@ import com.sashya.krushisetu.feature.supplier.SupplierProfileScreen
 import com.sashya.krushisetu.ui.components.KrushiBottomBar
 import com.sashya.krushisetu.ui.navigation.AppDestination
 import com.sashya.krushisetu.feature.advisory.AdvisorBottomBar
-import  com.sashya.krushisetu.feature.advisory.AdvisorFarmersScreen
+import com.sashya.krushisetu.feature.advisory.AdvisorFarmersScreen
 import com.sashya.krushisetu.feature.advisory.AdvisorConsultationsScreen
 import com.sashya.krushisetu.feature.advisory.AdvisorScheduleScreen
 import com.sashya.krushisetu.feature.advisory.AdvisorProfileScreen
-
+import com.sashya.krushisetu.feature.advisory.AdvisorFarmerDetailsScreen
 private enum class AppEntry {
     WELCOME,
     AUTHENTICATION,
@@ -499,6 +499,18 @@ fun KrushiSetuApp() {
                         mutableStateOf("HOME")
                     }
 
+                    var selectedFarmerName by remember {
+                        mutableStateOf("")
+                    }
+
+                    var selectedFarmerLocation by remember {
+                        mutableStateOf("")
+                    }
+
+                    var selectedFarmerCrop by remember {
+                        mutableStateOf("")
+                    }
+
                     Scaffold(
 
                         bottomBar = {
@@ -544,6 +556,10 @@ fun KrushiSetuApp() {
                                         authRepository.currentUserName()
                                             ?: "Advisor",
 
+                                    onOpenConsultations = {
+                                        advisorScreen = "CONSULTATIONS"
+                                    },
+
                                     onLogout = {
                                         authRepository.signOut()
                                         appEntryName =
@@ -551,9 +567,39 @@ fun KrushiSetuApp() {
                                     }
                                 )
 
-                                "FARMERS" -> AdvisorFarmersScreen()
-                                "CONSULTATIONS" -> AdvisorConsultationsScreen()
-                                "SCHEDULE" -> AdvisorScheduleScreen()
+                                "FARMERS" -> AdvisorFarmersScreen(
+                                    onBack = {
+                                        advisorScreen = "HOME"
+                                    },
+                                    onOpenFarmer = { name, location, crop ->
+
+                                        selectedFarmerName = name
+                                        selectedFarmerLocation = location
+                                        selectedFarmerCrop = crop
+
+                                        advisorScreen = "FARMER_DETAILS"
+                                    }
+                                )
+                                "FARMER_DETAILS" -> AdvisorFarmerDetailsScreen(
+                                    farmerName = selectedFarmerName,
+                                    location = selectedFarmerLocation,
+                                    crop = selectedFarmerCrop,
+                                    onBack = {
+                                        advisorScreen = "FARMERS"
+                                    }
+                                )
+
+                                "CONSULTATIONS" -> AdvisorConsultationsScreen(
+                                    onBack = {
+                                        advisorScreen = "HOME"
+                                    }
+                                )
+
+                                "SCHEDULE" -> AdvisorScheduleScreen(
+                                    onBack = {
+                                        advisorScreen = "HOME"
+                                    }
+                                )
 
                                 "PROFILE" -> AdvisorProfileScreen(
                                     advisorName =
@@ -562,6 +608,10 @@ fun KrushiSetuApp() {
 
                                     advisorEmail =
                                         authRepository.currentUserEmail(),
+
+                                    onBack = {
+                                        advisorScreen = "HOME"
+                                    },
 
                                     onLogout = {
                                         authRepository.signOut()

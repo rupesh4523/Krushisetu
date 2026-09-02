@@ -27,7 +27,9 @@ import com.sashya.krushisetu.ui.theme.LeafGreen
 import com.sashya.krushisetu.ui.theme.MutedText
 
 @Composable
-fun AdvisorScheduleScreen() {
+fun AdvisorScheduleScreen(
+    onBack: () -> Unit
+)  {
 
     Column(
         modifier = Modifier
@@ -36,8 +38,18 @@ fun AdvisorScheduleScreen() {
             .padding(horizontal = 20.dp)
     ) {
 
+        TextButton(
+            onClick = onBack
+        ) {
+            Text(
+                text = "← Back to Home",
+                color = LeafGreen,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
         Spacer(
-            modifier = Modifier.height(16.dp)
+            modifier = Modifier.height(4.dp)
         )
 
         // =========================================================
