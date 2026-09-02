@@ -1,6 +1,7 @@
 package com.sashya.krushisetu.feature.advisory
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -42,10 +43,11 @@ private data class AdvisorFarmer(
 )
 
 @Composable
-private fun FarmerListItem(
-    farmer: AdvisorFarmer,
-    onOpenFarmer: (String, String, String) -> Unit
-)   {
+fun AdvisorFarmersScreen(
+    onBack: () -> Unit,
+    onOpenFarmer: (String, String, String) -> Unit,
+    onOpenQueries: () -> Unit
+) {
 
     var searchText by remember {
         mutableStateOf("")
@@ -80,7 +82,6 @@ private fun FarmerListItem(
     )
 
     val filteredFarmers = farmers.filter { farmer ->
-
         farmer.name.contains(
             searchText,
             ignoreCase = true
@@ -102,19 +103,17 @@ private fun FarmerListItem(
             .padding(horizontal = 20.dp)
     ) {
 
+        // =========================================================
+        // BACK BUTTON
+        // =========================================================
+
         TextButton(
-            onClick = {
-                onOpenFarmer(
-                    farmer.name,
-                    farmer.location,
-                    farmer.crop
-                )
-            }
+            onClick = onBack
         ) {
             Text(
-                text = "›",
-                style = MaterialTheme.typography.headlineSmall,
-                color = LeafGreen
+                text = "← Back to Home",
+                color = LeafGreen,
+                fontWeight = FontWeight.Bold
             )
         }
 
@@ -122,9 +121,9 @@ private fun FarmerListItem(
             modifier = Modifier.height(4.dp)
         )
 
-        // ---------------------------------------------------------
+        // =========================================================
         // HEADER
-        // ---------------------------------------------------------
+        // =========================================================
 
         Text(
             text = "Farmers",
@@ -144,9 +143,9 @@ private fun FarmerListItem(
             modifier = Modifier.height(18.dp)
         )
 
-        // ---------------------------------------------------------
+        // =========================================================
         // FARMER COUNT
-        // ---------------------------------------------------------
+        // =========================================================
 
         Text(
             text = "${farmers.size} Registered Farmers",
@@ -159,9 +158,9 @@ private fun FarmerListItem(
             modifier = Modifier.height(12.dp)
         )
 
-        // ---------------------------------------------------------
+        // =========================================================
         // SEARCH
-        // ---------------------------------------------------------
+        // =========================================================
 
         OutlinedTextField(
             value = searchText,
@@ -188,9 +187,9 @@ private fun FarmerListItem(
             modifier = Modifier.height(20.dp)
         )
 
-        // ---------------------------------------------------------
+        // =========================================================
         // FARMER LIST
-        // ---------------------------------------------------------
+        // =========================================================
 
         LazyColumn(
             modifier = Modifier.weight(1f),
@@ -207,6 +206,7 @@ private fun FarmerListItem(
             }
 
             item {
+
                 Spacer(
                     modifier = Modifier.height(2.dp)
                 )
@@ -263,7 +263,9 @@ private fun FarmerListItem(
 
             item {
 
-                FarmerQueriesCard()
+                FarmerQueriesCard(
+                    onOpenQueries = onOpenQueries
+                )
             }
 
             item {
@@ -283,7 +285,8 @@ private fun FarmerListItem(
 
 @Composable
 private fun FarmerListItem(
-    farmer: AdvisorFarmer
+    farmer: AdvisorFarmer,
+    onOpenFarmer: (String, String, String) -> Unit
 ) {
 
     Card(
@@ -304,9 +307,9 @@ private fun FarmerListItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
 
-            // -----------------------------------------------------
+            // =====================================================
             // AVATAR
-            // -----------------------------------------------------
+            // =====================================================
 
             Column(
                 modifier = Modifier
@@ -328,9 +331,9 @@ private fun FarmerListItem(
                 modifier = Modifier.size(12.dp)
             )
 
-            // -----------------------------------------------------
+            // =====================================================
             // DETAILS
-            // -----------------------------------------------------
+            // =====================================================
 
             Column(
                 modifier = Modifier.weight(1f)
@@ -358,13 +361,17 @@ private fun FarmerListItem(
                 )
             }
 
-            // -----------------------------------------------------
+            // =====================================================
             // ARROW
-            // -----------------------------------------------------
+            // =====================================================
 
             TextButton(
                 onClick = {
-                    // Farmer detail screen will be added later.
+                    onOpenFarmer(
+                        farmer.name,
+                        farmer.location,
+                        farmer.crop
+                    )
                 }
             ) {
 
@@ -384,10 +391,16 @@ private fun FarmerListItem(
 // =================================================================
 
 @Composable
-private fun FarmerQueriesCard() {
+private fun FarmerQueriesCard(
+    onOpenQueries: () -> Unit
+) {
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable {
+                onOpenQueries()
+            },
         colors = CardDefaults.cardColors(
             containerColor = LeafGreen
         ),

@@ -578,6 +578,9 @@ fun KrushiSetuApp() {
                                         selectedFarmerCrop = crop
 
                                         advisorScreen = "FARMER_DETAILS"
+                                    },
+                                    onOpenQueries = {
+                                        advisorScreen = "CONSULTATIONS"
                                     }
                                 )
                                 "FARMER_DETAILS" -> AdvisorFarmerDetailsScreen(
