@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,6 +18,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -25,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.sashya.krushisetu.ui.theme.FieldCream
 import com.sashya.krushisetu.ui.theme.LeafGreen
 import com.sashya.krushisetu.ui.theme.MutedText
@@ -33,8 +36,9 @@ import com.sashya.krushisetu.ui.theme.MutedText
 fun AdvisorDashboardScreen(
     advisorName: String,
     onLogout: () -> Unit,
-    onOpenConsultations: () -> Unit
-){
+    onOpenConsultations: () -> Unit,
+    onOpenProfile: () -> Unit
+) {
 
     LazyColumn(
         modifier = Modifier
@@ -77,13 +81,22 @@ fun AdvisorDashboardScreen(
                     )
                 }
 
-                TextButton(
-                    onClick = onLogout
+                // =================================================
+                // PROFILE BUTTON
+                // =================================================
+
+                OutlinedButton(
+                    onClick = {
+                        onOpenProfile()
+                    },
+                    modifier = Modifier.size(48.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                    shape = RoundedCornerShape(14.dp)
                 ) {
+
                     Text(
-                        text = "Logout",
-                        color = LeafGreen,
-                        fontWeight = FontWeight.Bold
+                        text = "👤",
+                        fontSize = 18.sp
                     )
                 }
             }
@@ -328,73 +341,6 @@ fun AdvisorDashboardScreen(
                 }
             }
         }
-
-
-        // =========================================================
-        // QUICK ACTIONS
-        // =========================================================
-
-        item {
-
-            Text(
-                text = "Quick Actions",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-        }
-
-
-        item {
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-
-                QuickActionCard(
-                    icon = "👥",
-                    title = "Farmers",
-                    modifier = Modifier.weight(1f)
-                )
-
-                QuickActionCard(
-                    icon = "📹",
-                    title = "Consult",
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-
-
-        item {
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-
-                QuickActionCard(
-                    icon = "📚",
-                    title = "Resources",
-                    modifier = Modifier.weight(1f)
-                )
-
-                QuickActionCard(
-                    icon = "📅",
-                    title = "Schedule",
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-
-
-        item {
-
-            Spacer(
-                modifier = Modifier.height(20.dp)
-            )
-        }
     }
 }
 
@@ -439,55 +385,6 @@ private fun AdvisorStatCard(
                 text = label,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MutedText
-            )
-        }
-    }
-}
-
-
-// =============================================================
-// QUICK ACTION CARD
-// =============================================================
-
-@Composable
-private fun QuickActionCard(
-    icon: String,
-    title: String,
-    modifier: Modifier = Modifier
-) {
-
-    Card(
-        modifier = modifier.height(105.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        ),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 2.dp
-        )
-    ) {
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-
-            Text(
-                text = icon,
-                style = MaterialTheme.typography.titleLarge
-            )
-
-            Spacer(
-                modifier = Modifier.height(6.dp)
-            )
-
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold
             )
         }
     }

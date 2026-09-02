@@ -516,27 +516,18 @@ fun KrushiSetuApp() {
                         bottomBar = {
 
                             AdvisorBottomBar(
-
                                 selectedTab = advisorScreen,
-
                                 onHome = {
                                     advisorScreen = "HOME"
                                 },
-
                                 onFarmers = {
                                     advisorScreen = "FARMERS"
                                 },
-
                                 onConsultations = {
                                     advisorScreen = "CONSULTATIONS"
                                 },
-
                                 onSchedule = {
                                     advisorScreen = "SCHEDULE"
-                                },
-
-                                onProfile = {
-                                    advisorScreen = "PROFILE"
                                 }
                             )
                         }
@@ -558,6 +549,10 @@ fun KrushiSetuApp() {
 
                                     onOpenConsultations = {
                                         advisorScreen = "CONSULTATIONS"
+                                    },
+
+                                    onOpenProfile = {
+                                        advisorScreen = "PROFILE"
                                     },
 
                                     onLogout = {
