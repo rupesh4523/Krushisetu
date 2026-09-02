@@ -620,7 +620,7 @@ private fun CropSummaryCard() {
             }
 
             Text(
-                "● " + crop.healthLabel,
+                "Planted " + crop.plantingDate.ifBlank { "date not specified" },
                 color = LeafGreen,
                 style = MaterialTheme.typography.labelSmall
             )
