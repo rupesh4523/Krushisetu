@@ -17,8 +17,22 @@ object SampleData {
     )
 
     val crops = listOf(
-        Crop("Tomato", "Hybrid 46", "Flowering stage", "1.5 acres", "Healthy", "🍅"),
-        Crop("Wheat", "Lokwan", "Growing stage", "2 acres", "Needs attention", "🌾")
+        Crop(
+            name = "Tomato",
+            variety = "Hybrid 46",
+            stage = "Flowering stage",
+            area = "1.5 acres",
+            plantingDate = "12 Aug 2026",
+            healthEmoji = "🍅"
+        ),
+        Crop(
+            name = "Wheat",
+            variety = "Lokwan",
+            stage = "Growing stage",
+            area = "2 acres",
+            plantingDate = "25 Jul 2026",
+            healthEmoji = "🌾"
+        )
     )
 
     val advisories = listOf(

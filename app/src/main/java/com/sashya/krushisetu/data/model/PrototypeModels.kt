@@ -6,7 +6,7 @@ data class Crop(
     val variety: String = "",
     val stage: String = "",
     val area: String = "",
-    val healthLabel: String = "",
+    val plantingDate: String = "",
     val healthEmoji: String = "🌱"
 )
 

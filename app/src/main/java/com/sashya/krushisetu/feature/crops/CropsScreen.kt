@@ -1,10 +1,12 @@
 package com.sashya.krushisetu.feature.crops
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -12,157 +14,926 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.sashya.krushisetu.data.local.SampleData
+import com.sashya.krushisetu.data.crop.CropRepository
 import com.sashya.krushisetu.data.model.Crop
-import com.sashya.krushisetu.ui.components.ScreenHeader
-import com.sashya.krushisetu.ui.theme.LeafGreen
-import com.sashya.krushisetu.ui.theme.MutedText
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
+
+
+// =============================================================
+// CROPS SCREEN
+// =============================================================
 
 @Composable
-fun CropsScreen(modifier: Modifier = Modifier) {
-    var crops by remember { mutableStateOf(SampleData.crops) }
-    var showAddCrop by remember { mutableStateOf(false) }
+fun CropsScreen(
+    modifier: Modifier = Modifier
+) {
 
-    LazyColumn(
-        modifier = modifier,
-        contentPadding = PaddingValues(bottom = 24.dp)
-    ) {
-        item {
-            ScreenHeader(
-                title = "My crops 🌱",
-                subtitle = "Track your crop stage and field health."
-            )
-        }
-        item {
-            Button(
-                onClick = { showAddCrop = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 4.dp),
-                shape = RoundedCornerShape(14.dp)
-            ) {
-                Text("＋ Add a crop", modifier = Modifier.padding(vertical = 4.dp), fontWeight = FontWeight.Bold)
+    // =========================================================
+    // REPOSITORY
+    // =========================================================
+
+    val cropRepository = remember {
+        CropRepository()
+    }
+
+    // =========================================================
+    // SCREEN STATE
+    // =========================================================
+
+    var crops by remember {
+        mutableStateOf<List<Crop>>(emptyList())
+    }
+
+    var isLoading by remember {
+        mutableStateOf(true)
+    }
+
+    var errorMessage by remember {
+        mutableStateOf<String?>(null)
+    }
+
+    var showAddCropDialog by remember {
+        mutableStateOf(false)
+    }
+
+    // =========================================================
+    // REAL-TIME FIRESTORE LISTENER
+    // =========================================================
+
+    DisposableEffect(Unit) {
+
+        val listener = cropRepository.getCrops { result ->
+
+            result.onSuccess { loadedCrops ->
+
+                crops = loadedCrops
+                isLoading = false
+                errorMessage = null
+
+            }.onFailure { exception ->
+
+                crops = emptyList()
+                isLoading = false
+
+                errorMessage =
+                    exception.localizedMessage
+                        ?: "Unable to load your crops."
             }
-            Spacer(Modifier.height(8.dp))
         }
-        items(crops) { crop ->
-            CropCard(crop)
+
+        onDispose {
+            listener?.remove()
         }
     }
 
-    if (showAddCrop) {
-        AddCropDialog(
-            onDismiss = { showAddCrop = false },
-            onSave = { name ->
-                crops = crops + Crop(
-                    name = name.ifBlank { "New crop" },
-                    variety = "Variety not added",
-                    stage = "Sowing stage",
-                    area = "Area not added",
-                    healthLabel = "New",
-                    healthEmoji = "🌿"
-                )
-                showAddCrop = false
-            }
-        )
-    }
-}
+    // =========================================================
+    // SCREEN
+    // =========================================================
 
-@Composable
-private fun CropCard(crop: Crop) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 6.dp),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+    Box(
+        modifier = modifier.fillMaxSize()
     ) {
-        Row(
-            modifier = Modifier.padding(18.dp),
-            verticalAlignment = Alignment.CenterVertically
+
+        Column(
+            modifier = Modifier.fillMaxSize()
         ) {
-            Text(crop.healthEmoji, fontSize = 42.sp)
-            Spacer(Modifier.width(14.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(crop.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text(crop.variety, style = MaterialTheme.typography.bodyMedium, color = MutedText)
-                Row(
-                    modifier = Modifier.padding(top = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+
+            // =================================================
+            // HEADER
+            // =================================================
+
+            Column(
+                modifier = Modifier.padding(
+                    horizontal = 20.dp,
+                    vertical = 16.dp
+                )
+            ) {
+
+                Text(
+                    text = "My crops 🌱",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(
+                    modifier = Modifier.height(4.dp)
+                )
+
+                Text(
+                    text = "Track your crop stage and field details.",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+
+                Spacer(
+                    modifier = Modifier.height(20.dp)
+                )
+
+                // =================================================
+                // ADD CROP BUTTON
+                // =================================================
+
+                Button(
+                    onClick = {
+                        showAddCropDialog = true
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape = RoundedCornerShape(16.dp)
                 ) {
-                    CropDetail(label = crop.stage)
-                    CropDetail(label = crop.area)
+
+                    Text(
+                        text = "+  Add a crop",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(
+                    modifier = Modifier.height(16.dp)
+                )
+            }
+
+            // =================================================
+            // LOADING
+            // =================================================
+
+            if (isLoading) {
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+
+                    CircularProgressIndicator()
+                }
+            }
+
+            // =================================================
+            // ERROR
+            // =================================================
+
+            else if (errorMessage != null) {
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+
+                    Text(
+                        text = errorMessage!!,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+
+            // =================================================
+            // EMPTY STATE
+            // =================================================
+
+            else if (crops.isEmpty()) {
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+
+                    Column(
+                        horizontalAlignment =
+                            Alignment.CenterHorizontally
+                    ) {
+
+                        Text(
+                            text = "🌱",
+                            style =
+                                MaterialTheme.typography.displaySmall
+                        )
+
+                        Spacer(
+                            modifier = Modifier.height(8.dp)
+                        )
+
+                        Text(
+                            text = "No crops added yet.",
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Spacer(
+                            modifier = Modifier.height(4.dp)
+                        )
+
+                        Text(
+                            text =
+                                "Add your first crop to start tracking it."
+                        )
+                    }
+                }
+            }
+
+            // =================================================
+            // REAL CROPS
+            // =================================================
+
+            else {
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+
+                    verticalArrangement =
+                        Arrangement.spacedBy(16.dp),
+
+                    contentPadding =
+                        PaddingValues(
+                            start = 20.dp,
+                            end = 20.dp,
+                            bottom = 24.dp
+                        )
+                ) {
+
+                    items(
+                        items = crops,
+                        key = { crop ->
+                            crop.id
+                        }
+                    ) { crop ->
+
+                        CropCard(
+                            crop = crop
+                        )
+                    }
                 }
             }
         }
-        Text(
-            text = "● " + crop.healthLabel,
-            color = if (crop.healthLabel == "Needs attention") MaterialTheme.colorScheme.tertiary else LeafGreen,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(start = 18.dp, bottom = 16.dp)
+    }
+
+    // =========================================================
+    // ADD CROP DIALOG
+    // =========================================================
+
+    if (showAddCropDialog) {
+
+        AddCropDialog(
+
+            onDismiss = {
+                showAddCropDialog = false
+            },
+
+            onSave = { crop ->
+
+                cropRepository.addCrop(crop) { result ->
+
+                    result.onSuccess {
+
+                        showAddCropDialog = false
+                        errorMessage = null
+
+                    }.onFailure { exception ->
+
+                        errorMessage =
+                            exception.localizedMessage
+                                ?: "Unable to save the crop."
+                    }
+                }
+            }
         )
     }
 }
 
-@Composable
-private fun CropDetail(label: String) {
-    Text(
-        text = label,
-        style = MaterialTheme.typography.labelSmall,
-        color = MutedText
-    )
-}
+
+// =============================================================
+// CROP CARD
+// =============================================================
 
 @Composable
-private fun AddCropDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
-    var cropName by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Add crop") },
-        text = {
+private fun CropCard(
+    crop: Crop
+) {
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+
+        shape = RoundedCornerShape(24.dp),
+
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 2.dp
+        )
+    ) {
+
+        Column(
+            modifier = Modifier.padding(20.dp)
+        ) {
+
+            // =================================================
+            // CROP NAME
+            // =================================================
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment =
+                    Alignment.CenterVertically
+            ) {
+
+                Text(
+                    text = crop.healthEmoji,
+                    fontSize = 42.sp
+                )
+
+                Spacer(
+                    modifier = Modifier.width(14.dp)
+                )
+
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+
+                    Text(
+                        text = crop.name,
+
+                        style =
+                            MaterialTheme.typography.headlineSmall,
+
+                        fontWeight =
+                            FontWeight.Bold
+                    )
+
+                    if (crop.variety.isNotBlank()) {
+
+                        Text(
+                            text = crop.variety,
+
+                            style =
+                                MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            }
+
+            Spacer(
+                modifier = Modifier.height(16.dp)
+            )
+
+            // =================================================
+            // CROP DETAILS
+            // =================================================
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+
+                horizontalArrangement =
+                    Arrangement.spacedBy(16.dp)
+            ) {
+
+                // -------------------------------------------------
+                // GROWTH STAGE
+                // -------------------------------------------------
+
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+
+                    Text(
+                        text = "Stage",
+
+                        style =
+                            MaterialTheme.typography.labelMedium
+                    )
+
+                    Text(
+                        text = crop.stage.ifBlank {
+                            "Not specified"
+                        },
+
+                        fontWeight =
+                            FontWeight.Medium
+                    )
+                }
+
+                // -------------------------------------------------
+                // AREA
+                // -------------------------------------------------
+
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+
+                    Text(
+                        text = "Area",
+
+                        style =
+                            MaterialTheme.typography.labelMedium
+                    )
+
+                    Text(
+                        text = crop.area.ifBlank {
+                            "Not specified"
+                        },
+
+                        fontWeight =
+                            FontWeight.Medium
+                    )
+                }
+            }
+
+            Spacer(
+                modifier = Modifier.height(16.dp)
+            )
+
+            // =================================================
+            // PLANTING DATE
+            // =================================================
+
             Column {
-                Text("Add a crop to your prototype farm profile.")
-                OutlinedTextField(
-                    value = cropName,
-                    onValueChange = { cropName = it },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp),
-                    singleLine = true,
-                    label = { Text("Crop name") },
-                    placeholder = { Text("Example: Cotton") }
+
+                Text(
+                    text = "Planting date",
+
+                    style =
+                        MaterialTheme.typography.labelMedium
+                )
+
+                Text(
+                    text = crop.plantingDate.ifBlank {
+                        "Not specified"
+                    },
+
+                    fontWeight =
+                        FontWeight.Medium
                 )
             }
+        }
+    }
+}
+
+
+// =============================================================
+// ADD CROP DIALOG
+// =============================================================
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddCropDialog(
+    onDismiss: () -> Unit,
+    onSave: (Crop) -> Unit
+) {
+
+    // =========================================================
+    // FORM STATE
+    // =========================================================
+
+    var name by remember {
+        mutableStateOf("")
+    }
+
+    var variety by remember {
+        mutableStateOf("")
+    }
+
+    var stage by remember {
+        mutableStateOf("")
+    }
+
+    var area by remember {
+        mutableStateOf("")
+    }
+
+    var healthEmoji by remember {
+        mutableStateOf("🌱")
+    }
+
+    var plantingDate by remember {
+        mutableStateOf("")
+    }
+
+    var showDatePicker by remember {
+        mutableStateOf(false)
+    }
+
+    var validationMessage by remember {
+        mutableStateOf<String?>(null)
+    }
+
+    // =========================================================
+    // MAIN DIALOG
+    // =========================================================
+
+    AlertDialog(
+
+        onDismissRequest = onDismiss,
+
+        title = {
+
+            Text(
+                text = "Add a crop",
+                fontWeight = FontWeight.Bold
+            )
         },
+
+        text = {
+
+            Column(
+                modifier = Modifier
+                    .verticalScroll(
+                        rememberScrollState()
+                    ),
+
+                verticalArrangement =
+                    Arrangement.spacedBy(10.dp)
+            ) {
+
+                // =================================================
+                // CROP NAME
+                // =================================================
+
+                OutlinedTextField(
+
+                    value = name,
+
+                    onValueChange = {
+                        name = it
+                        validationMessage = null
+                    },
+
+                    modifier =
+                        Modifier.fillMaxWidth(),
+
+                    label = {
+                        Text("Crop name")
+                    },
+
+                    placeholder = {
+                        Text("Example: Tomato")
+                    },
+
+                    singleLine = true
+                )
+
+                // =================================================
+                // VARIETY
+                // =================================================
+
+                OutlinedTextField(
+
+                    value = variety,
+
+                    onValueChange = {
+                        variety = it
+                    },
+
+                    modifier =
+                        Modifier.fillMaxWidth(),
+
+                    label = {
+                        Text("Variety")
+                    },
+
+                    placeholder = {
+                        Text("Example: Hybrid 46")
+                    },
+
+                    singleLine = true
+                )
+
+                // =================================================
+                // GROWTH STAGE
+                // =================================================
+
+                OutlinedTextField(
+
+                    value = stage,
+
+                    onValueChange = {
+                        stage = it
+                        validationMessage = null
+                    },
+
+                    modifier =
+                        Modifier.fillMaxWidth(),
+
+                    label = {
+                        Text("Growth stage")
+                    },
+
+                    placeholder = {
+                        Text("Example: Flowering stage")
+                    },
+
+                    singleLine = true
+                )
+
+                // =================================================
+                // AREA
+                // =================================================
+
+                OutlinedTextField(
+
+                    value = area,
+
+                    onValueChange = {
+                        area = it
+                    },
+
+                    modifier =
+                        Modifier.fillMaxWidth(),
+
+                    label = {
+                        Text("Area")
+                    },
+
+                    placeholder = {
+                        Text("Example: 1.5 acres")
+                    },
+
+                    singleLine = true
+                )
+
+                // =================================================
+                // PLANTING DATE
+                // =================================================
+
+                OutlinedTextField(
+
+                    value = plantingDate,
+
+                    onValueChange = {
+                        // Read-only field.
+                        // Date comes from calendar.
+                    },
+
+                    modifier =
+                        Modifier
+                            .fillMaxWidth(),
+
+                    label = {
+                        Text("Planting date")
+                    },
+
+                    placeholder = {
+                        Text("Select planting date")
+                    },
+
+                    readOnly = true,
+
+                    singleLine = true,
+
+                    trailingIcon = {
+
+                        TextButton(
+                            onClick = {
+                                showDatePicker = true
+                            }
+                        ) {
+
+                            Text("📅")
+                        }
+                    }
+                )
+
+                // =================================================
+                // CROP EMOJI
+                // =================================================
+
+                OutlinedTextField(
+
+                    value = healthEmoji,
+
+                    onValueChange = {
+                        healthEmoji = it
+                    },
+
+                    modifier =
+                        Modifier.fillMaxWidth(),
+
+                    label = {
+                        Text("Crop emoji")
+                    },
+
+                    placeholder = {
+                        Text("🌱")
+                    },
+
+                    singleLine = true
+                )
+
+                // =================================================
+                // VALIDATION MESSAGE
+                // =================================================
+
+                if (validationMessage != null) {
+
+                    Text(
+                        text = validationMessage!!,
+
+                        color =
+                            MaterialTheme
+                                .colorScheme
+                                .error
+                    )
+                }
+            }
+        },
+
+        // =========================================================
+        // SAVE BUTTON
+        // =========================================================
+
         confirmButton = {
-            Button(onClick = { onSave(cropName) }) {
+
+            TextButton(
+
+                onClick = {
+
+                    if (name.isBlank()) {
+
+                        validationMessage =
+                            "Please enter the crop name."
+
+                        return@TextButton
+                    }
+
+                    if (stage.isBlank()) {
+
+                        validationMessage =
+                            "Please enter the growth stage."
+
+                        return@TextButton
+                    }
+
+                    if (plantingDate.isBlank()) {
+
+                        validationMessage =
+                            "Please select the planting date."
+
+                        return@TextButton
+                    }
+
+                    val crop = Crop(
+
+                        name =
+                            name.trim(),
+
+                        variety =
+                            variety.trim(),
+
+                        stage =
+                            stage.trim(),
+
+                        area =
+                            area.trim(),
+
+                        plantingDate =
+                            plantingDate.trim(),
+
+                        healthEmoji =
+                            healthEmoji
+                                .trim()
+                                .ifBlank {
+                                    "🌱"
+                                }
+                    )
+
+                    onSave(crop)
+                }
+            ) {
+
                 Text("Save crop")
             }
         },
+
+        // =========================================================
+        // CANCEL BUTTON
+        // =========================================================
+
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+
+            TextButton(
+                onClick = onDismiss
+            ) {
+
                 Text("Cancel")
             }
         }
+    )
+
+    // =========================================================
+    // DATE PICKER
+    // =========================================================
+
+    if (showDatePicker) {
+
+        val datePickerState =
+            rememberDatePickerState()
+
+        DatePickerDialog(
+
+            onDismissRequest = {
+                showDatePicker = false
+            },
+
+            confirmButton = {
+
+                TextButton(
+
+                    onClick = {
+
+                        val selectedDate =
+                            datePickerState.selectedDateMillis
+
+                        if (selectedDate != null) {
+
+                            plantingDate =
+                                formatDate(
+                                    selectedDate
+                                )
+
+                            validationMessage = null
+                        }
+
+                        showDatePicker = false
+                    }
+                ) {
+
+                    Text("Select")
+                }
+            },
+
+            dismissButton = {
+
+                TextButton(
+
+                    onClick = {
+                        showDatePicker = false
+                    }
+                ) {
+
+                    Text("Cancel")
+                }
+            }
+        ) {
+
+            DatePicker(
+                state = datePickerState
+            )
+        }
+    }
+}
+
+
+// =============================================================
+// FORMAT DATE
+// =============================================================
+
+private fun formatDate(
+    millis: Long
+): String {
+
+    val formatter =
+        SimpleDateFormat(
+            "dd MMM yyyy",
+            Locale.getDefault()
+        )
+
+    formatter.timeZone =
+        TimeZone.getTimeZone("UTC")
+
+    return formatter.format(
+        Date(millis)
     )
 }
