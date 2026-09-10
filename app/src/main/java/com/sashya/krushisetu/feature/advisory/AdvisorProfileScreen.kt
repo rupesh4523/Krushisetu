@@ -1,6 +1,8 @@
 package com.sashya.krushisetu.feature.advisory
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -44,7 +46,8 @@ fun AdvisorProfileScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(FieldCream)
-            .padding(horizontal = 20.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 12.dp)
     ) {
 
         TextButton(
@@ -275,13 +278,15 @@ fun AdvisorProfileScreen(
             modifier = Modifier.height(8.dp)
         )
 
-        TextButton(
+        OutlinedButton(
             onClick = onLogout,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
         ) {
 
             Text(
-                text = "Logout",
+                text = "Sign out",
                 color = LeafGreen,
                 fontWeight = FontWeight.Bold
             )

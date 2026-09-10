@@ -16,6 +16,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,7 +29,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+import com.sashya.krushisetu.data.crop.CropRepository
 import com.sashya.krushisetu.data.local.SampleData
+import com.sashya.krushisetu.data.model.Crop
 import com.sashya.krushisetu.data.model.UserProfile
 import com.sashya.krushisetu.data.weather.WeatherData
 import com.sashya.krushisetu.data.weather.WeatherRepository
@@ -66,11 +69,41 @@ fun HomeScreen(
     }
 
     // ---------------------------------------------------------
+    // CROPS STATE
+    // ---------------------------------------------------------
+
+    val cropRepository = remember {
+        CropRepository()
+    }
+
+    var crops by remember {
+        mutableStateOf<List<Crop>>(emptyList())
+    }
+
+    // ---------------------------------------------------------
     // WEATHER REPOSITORY
     // ---------------------------------------------------------
 
     val weatherRepository = remember {
         WeatherRepository()
+    }
+
+    // ---------------------------------------------------------
+    // LISTEN TO THE SAME FIRESTORE CROPS USED BY "MY CROPS"
+    // ---------------------------------------------------------
+
+    DisposableEffect(Unit) {
+        val listener = cropRepository.getCrops { result ->
+            result.onSuccess { loadedCrops ->
+                crops = loadedCrops
+            }.onFailure {
+                crops = emptyList()
+            }
+        }
+
+        onDispose {
+            listener?.remove()
+        }
     }
 
     // ---------------------------------------------------------
@@ -234,30 +267,19 @@ fun HomeScreen(
         }
 
         item {
-
             SectionTitle(
-                "Your crops",
-                action = "View all",
-                onAction = onOpenCrops
+                "Today's advisory"
             )
 
-            CropSummaryCard()
-        }
-
-        item {
-
-            SectionTitle(
-                "Today's advisory",
-                action = "View all",
-                onAction = onOpenAdvisory
-            )
-
-            AdvisoryCard(
-                advisory = SampleData.advisories.first(),
-                modifier = Modifier.padding(
-                    horizontal = 20.dp
+            SampleData.advisories.forEach { advisory ->
+                AdvisoryCard(
+                    advisory = advisory,
+                    modifier = Modifier.padding(
+                        horizontal = 20.dp,
+                        vertical = 6.dp
+                    )
                 )
-            )
+            }
         }
 
         item {
@@ -563,15 +585,16 @@ private fun QuickAction(
 // =============================================================
 
 @Composable
-private fun CropSummaryCard() {
-
-    val crop =
-        SampleData.crops.first()
-
+private fun CropSummaryCard(
+    crop: Crop
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp),
+            .padding(
+                horizontal = 20.dp,
+                vertical = 5.dp
+            ),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color.White
@@ -623,6 +646,53 @@ private fun CropSummaryCard() {
                 "Planted " + crop.plantingDate.ifBlank { "date not specified" },
                 color = LeafGreen,
                 style = MaterialTheme.typography.labelSmall
+            )
+        }
+    }
+}
+
+@Composable
+private fun EmptyCropsCard(
+    onOpenCrops: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .clickable(onClick = onOpenCrops),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "🌱",
+                fontSize = 34.sp
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = "No crops added yet",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Add your first crop to see it on the dashboard.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MutedText
+                )
+            }
+            Text(
+                text = "Add →",
+                color = LeafGreen,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold
             )
         }
     }

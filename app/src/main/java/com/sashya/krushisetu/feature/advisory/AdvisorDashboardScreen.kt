@@ -345,10 +345,6 @@ fun AdvisorDashboardScreen(
 }
 
 
-// =============================================================
-// STAT CARD
-// =============================================================
-
 @Composable
 private fun AdvisorStatCard(
     value: String,

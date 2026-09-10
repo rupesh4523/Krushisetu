@@ -19,7 +19,6 @@ import com.sashya.krushisetu.data.auth.FirebaseAuthRepository
 import com.sashya.krushisetu.data.model.UserProfile
 import com.sashya.krushisetu.data.model.UserRole
 
-import com.sashya.krushisetu.feature.advisory.AdvisoryScreen
 import com.sashya.krushisetu.feature.advisory.AdvisorDashboardScreen
 import com.sashya.krushisetu.feature.auth.AuthenticationScreen
 import com.sashya.krushisetu.feature.consultation.ConsultationScreen
@@ -391,17 +390,17 @@ fun KrushiSetuApp() {
                         // =========================================
 
                         AppDestination.ADVISORY ->
-                            AdvisoryScreen(
+                            PlantScanScreen(
 
                                 modifier =
                                     Modifier.padding(
                                         innerPadding
                                     ),
 
-                                onOpenPlantScan = {
+                                onOpenConsultation = {
 
                                     destinationName =
-                                        AppDestination.PLANT_SCAN.name
+                                        AppDestination.CONSULTATION.name
                                 }
                             )
 
