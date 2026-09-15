@@ -39,15 +39,30 @@ fun KrushiBottomBar(
 ) {
     NavigationBar {
         AppDestination.entries
-            .filter { it != AppDestination.PLANT_SCAN }
+            .filter {
+                it != AppDestination.PLANT_SCAN &&
+                        it != AppDestination.CONSULTATION
+            }
             .forEach { destination ->
-            NavigationBarItem(
-                selected = destination == currentDestination,
-                onClick = { onDestinationSelected(destination) },
-                icon = { Text(destination.emoji, fontSize = 19.sp) },
-                label = { Text(destination.label, fontSize = 10.sp) }
-            )
-        }
+                NavigationBarItem(
+                    selected = destination == currentDestination,
+                    onClick = {
+                        onDestinationSelected(destination)
+                    },
+                    icon = {
+                        Text(
+                            destination.emoji,
+                            fontSize = 19.sp
+                        )
+                    },
+                    label = {
+                        Text(
+                            destination.label,
+                            fontSize = 10.sp
+                        )
+                    }
+                )
+            }
     }
 }
 

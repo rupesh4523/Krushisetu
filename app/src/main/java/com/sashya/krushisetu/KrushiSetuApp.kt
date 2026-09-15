@@ -45,6 +45,7 @@ import com.sashya.krushisetu.feature.advisory.AdvisorConsultationsScreen
 import com.sashya.krushisetu.feature.advisory.AdvisorScheduleScreen
 import com.sashya.krushisetu.feature.advisory.AdvisorProfileScreen
 import com.sashya.krushisetu.feature.advisory.AdvisorFarmerDetailsScreen
+import com.sashya.krushisetu.feature.shop.ShopScreen
 private enum class AppEntry {
     WELCOME,
     AUTHENTICATION,
@@ -386,6 +387,18 @@ fun KrushiSetuApp() {
                             )
 
                         // =========================================
+                        // FARMER CONSULTATION
+                        // =========================================
+
+                        AppDestination.CONSULTATION ->
+                            ConsultationScreen(
+                                modifier =
+                                    Modifier.padding(
+                                        innerPadding
+                                    )
+                            )
+
+                        // =========================================
                         // FARMER ADVISORY
                         // =========================================
 
@@ -424,17 +437,15 @@ fun KrushiSetuApp() {
                             )
 
                         // =========================================
-                        // FARMER CONSULTATION
+                        // FARMER SHOP
                         // =========================================
 
-                        AppDestination.CONSULTATION ->
-                            ConsultationScreen(
-
-                                modifier =
-                                    Modifier.padding(
-                                        innerPadding
-                                    )
+                        AppDestination.SHOP -> ShopScreen(
+                            modifier =
+                                Modifier.padding(
+                                    innerPadding
                             )
+                        )
 
                         // =========================================
                         // FARMER PROFILE

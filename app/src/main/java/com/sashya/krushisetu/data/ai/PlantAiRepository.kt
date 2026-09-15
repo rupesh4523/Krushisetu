@@ -56,40 +56,93 @@ class PlantAiRepository {
                 val responseJson = sendRequest(requestJson)
                 parseAnalysis(responseJson)
             }.fold(
-                onSuccess = { PlantAnalysisResult.Success(it) },
+                onSuccess = {
+                    PlantAnalysisResult.Success(it)
+                },
                 onFailure = {
                     PlantAnalysisResult.Failure(
-                        it.message ?: "Plant analysis could not be completed. Please try again."
+                        it.message
+                            ?: "Plant analysis could not be completed. Please try again."
                     )
                 }
             )
-            mainHandler.post { onResult(result) }
+
+            mainHandler.post {
+                onResult(result)
+            }
         }.start()
     }
 
-    private fun createRequest(bitmap: Bitmap, details: PlantScanDetails): JSONObject {
+    private fun createRequest(
+        bitmap: Bitmap,
+        details: PlantScanDetails
+    ): JSONObject {
+
         val imageData = bitmap.toBase64Jpeg()
+
         val farmerDetails = listOf(
             "Crop: " + details.cropName.ifBlank { "Not specified" },
             "Plant part photographed: " + details.plantPart.ifBlank { "Not specified" },
             "Symptoms noticed: " + details.symptoms.ifBlank { "Not specified" },
-            "How long symptoms have been present: " + details.duration.ifBlank { "Not specified" }
-        ).joinToString(separator = "\n- ", prefix = "- ")
+            "How long symptoms have been present: " +
+                    details.duration.ifBlank { "Not specified" }
+        ).joinToString(
+            separator = "\n- ",
+            prefix = "- "
+        )
+
         val prompt = """
             You are Krushi AI Assist, an agricultural support assistant for farmers in India.
-            Analyze the supplied plant photo together with the farmer's context. This is an initial visual screening, not a laboratory diagnosis.
+
+            Analyze the supplied plant photo together with the farmer's context.
+            This is an initial visual screening, not a laboratory diagnosis.
 
             Farmer-provided details:
             $farmerDetails
 
+            IMPORTANT LANGUAGE INSTRUCTION:
+
+            - Detect the language used by the farmer in the provided details.
+            - Respond to the farmer in the SAME LANGUAGE used by the farmer.
+            - If the farmer's details are in Hindi, provide the complete answer in Hindi.
+            - If the farmer's details are in Marathi, provide the complete answer in Marathi.
+            - If the farmer's details are in English, provide the complete answer in English.
+            - If another Indian language is used, respond in that same language when possible.
+            - Do not translate the farmer's information into English before analyzing it.
+            - All farmer-facing text values in the JSON must use the detected language.
+            - Keep the JSON field names exactly as defined in the schema.
+            - Do not add any extra JSON fields.
+            - Do not mix English and the detected local language unless a technical
+              agricultural term genuinely needs its English name in brackets.
+
+            IMPORTANT OUTPUT INSTRUCTION:
+
+            - Return ONE complete JSON object.
+            - Complete ALL required fields before ending the response.
+            - Do not stop after generating possibleIssue.
+            - Keep every answer concise and farmer-friendly.
+            - observedSigns should contain only a few important visible signs.
+            - immediateActions should contain only a few important low-risk actions.
+            - prevention should be short.
+            - expertAdvice should be short.
+            - disclaimer should be short.
+            - Do not use Markdown code fences.
+            - Do not write any explanation outside the JSON object.
+
             Instructions:
-            - Identify only a possible issue. If the photo or context is unclear, say "Insufficient evidence from photo".
+            - Identify only a possible issue.
+            - If the photo or context is unclear, say the equivalent of
+              "Insufficient evidence from photo" in the farmer's language.
             - Describe only visible signs and do not invent observations.
-            - Give low-risk immediate actions such as isolating affected leaves, improving observation, or consulting a local agriculture expert.
+            - Give low-risk immediate actions such as isolating affected leaves,
+              improving observation, or consulting a local agriculture expert.
             - Do not state a definite diagnosis.
-            - Do not recommend pesticide brands, exact chemical mixtures, or application doses.
-            - Encourage an agriculture expert when verification or treatment is required.
-            - Use simple, farmer-friendly English.
+            - Do not recommend pesticide brands, exact chemical mixtures,
+              or application doses.
+            - Encourage an agriculture expert when verification or treatment
+              is required.
+            - Use simple, farmer-friendly language appropriate for the
+              detected language.
         """.trimIndent()
 
         return JSONObject()
@@ -112,7 +165,7 @@ class PlantAiRepository {
             .put(
                 "generation_config",
                 JSONObject()
-                    .put("max_output_tokens", 700)
+                    .put("max_output_tokens", 1400)
                     .put("thinking_level", "low")
             )
             .put(
@@ -126,32 +179,55 @@ class PlantAiRepository {
 
     private fun sendRequest(request: JSONObject): JSONObject {
         val connection = URL(apiUrl).openConnection() as HttpURLConnection
+
         return try {
             connection.requestMethod = "POST"
             connection.connectTimeout = 20_000
             connection.readTimeout = 30_000
             connection.doOutput = true
-            connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-            connection.setRequestProperty("x-goog-api-key", BuildConfig.PLANT_AI_API_KEY)
 
-            connection.outputStream.bufferedWriter(Charsets.UTF_8).use { writer ->
-                writer.write(request.toString())
-            }
+            connection.setRequestProperty(
+                "Content-Type",
+                "application/json; charset=utf-8"
+            )
+
+            connection.setRequestProperty(
+                "x-goog-api-key",
+                BuildConfig.PLANT_AI_API_KEY
+            )
+
+            connection.outputStream
+                .bufferedWriter(Charsets.UTF_8)
+                .use { writer ->
+                    writer.write(request.toString())
+                }
 
             val responseCode = connection.responseCode
-            val responseBody = (if (responseCode in 200..299) connection.inputStream else connection.errorStream)
-                ?.bufferedReader()
-                ?.use { it.readText() }
-                .orEmpty()
+
+            val responseBody =
+                (if (responseCode in 200..299) {
+                    connection.inputStream
+                } else {
+                    connection.errorStream
+                })
+                    ?.bufferedReader()
+                    ?.use { it.readText() }
+                    .orEmpty()
 
             if (responseCode !in 200..299) {
                 val message = runCatching {
-                    JSONObject(responseBody).getJSONObject("error").optString("message")
+                    JSONObject(responseBody)
+                        .getJSONObject("error")
+                        .optString("message")
                 }.getOrDefault("")
+
                 throw IllegalStateException(
-                    message.ifBlank { "AI analysis request failed with code " + responseCode + "." }
+                    message.ifBlank {
+                        "AI analysis request failed with code $responseCode."
+                    }
                 )
             }
+
             JSONObject(responseBody)
         } finally {
             connection.disconnect()
@@ -159,32 +235,87 @@ class PlantAiRepository {
     }
 
     private fun parseAnalysis(response: JSONObject): PlantAnalysis {
+
         val responseText = response.optJSONArray("steps")
             ?.let { steps ->
+
                 (0 until steps.length())
-                    .mapNotNull { steps.optJSONObject(it) }
-                    .lastOrNull { it.optString("type") == "model_output" }
+                    .mapNotNull {
+                        steps.optJSONObject(it)
+                    }
+                    .lastOrNull {
+                        it.optString("type") == "model_output"
+                    }
                     ?.optJSONArray("content")
                     ?.let { content ->
+
                         (0 until content.length())
-                            .mapNotNull { content.optJSONObject(it) }
-                            .firstOrNull { it.optString("type") == "text" }
+                            .mapNotNull {
+                                content.optJSONObject(it)
+                            }
+                            .firstOrNull {
+                                it.optString("type") == "text"
+                            }
                             ?.optString("text")
                     }
             }
 
         if (responseText.isNullOrBlank()) {
-            throw IllegalStateException("Krushi AI Assist did not return an analysis. Please take a clearer photo and try again.")
+            throw IllegalStateException(
+                "Krushi AI Assist did not return an analysis. Please take a clearer photo and try again."
+            )
         }
 
-        val analysis = JSONObject(responseText)
+        /*
+         * Gemini should return pure JSON because response_format requests
+         * application/json. This cleanup also protects us if the model
+         * accidentally wraps the JSON in Markdown code fences.
+         */
+        val cleanedResponse = responseText
+            .trim()
+            .removePrefix("```json")
+            .removePrefix("```JSON")
+            .removePrefix("```")
+            .removeSuffix("```")
+            .trim()
+
+        val analysis = try {
+            JSONObject(cleanedResponse)
+        } catch (exception: Exception) {
+            throw IllegalStateException(
+                "Krushi AI Assist returned an incomplete or invalid analysis. Please try again with a clearer photo."
+            )
+        }
+
         return PlantAnalysis(
-            possibleIssue = analysis.optString("possibleIssue", "Insufficient evidence from photo"),
-            confidence = analysis.optString("confidence", "Low"),
-            observedSigns = analysis.optJSONArray("observedSigns").toStringList(),
-            immediateActions = analysis.optJSONArray("immediateActions").toStringList(),
-            prevention = analysis.optString("prevention", "Monitor the plant and keep the area clean."),
-            expertAdvice = analysis.optString("expertAdvice", "Consult a qualified agriculture expert for confirmation."),
+            possibleIssue = analysis.optString(
+                "possibleIssue",
+                "Insufficient evidence from photo"
+            ),
+
+            confidence = analysis.optString(
+                "confidence",
+                "Low"
+            ),
+
+            observedSigns = analysis
+                .optJSONArray("observedSigns")
+                .toStringList(),
+
+            immediateActions = analysis
+                .optJSONArray("immediateActions")
+                .toStringList(),
+
+            prevention = analysis.optString(
+                "prevention",
+                "Monitor the plant and keep the area clean."
+            ),
+
+            expertAdvice = analysis.optString(
+                "expertAdvice",
+                "Consult a qualified agriculture expert for confirmation."
+            ),
+
             disclaimer = analysis.optString(
                 "disclaimer",
                 "This AI result is an initial screening only, not a confirmed diagnosis."
@@ -194,33 +325,93 @@ class PlantAiRepository {
 
     private fun Bitmap.toBase64Jpeg(): String {
         val output = ByteArrayOutputStream()
-        compress(Bitmap.CompressFormat.JPEG, 82, output)
-        return Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
+
+        compress(
+            Bitmap.CompressFormat.JPEG,
+            82,
+            output
+        )
+
+        return Base64.encodeToString(
+            output.toByteArray(),
+            Base64.NO_WRAP
+        )
     }
 
     private fun JSONArray?.toStringList(): List<String> {
-        if (this == null) return emptyList()
-        return List(length()) { index -> optString(index) }.filter { it.isNotBlank() }
+        if (this == null) {
+            return emptyList()
+        }
+
+        return List(length()) { index ->
+            optString(index)
+        }.filter {
+            it.isNotBlank()
+        }
     }
 
     private companion object {
+
         const val apiUrl =
             "https://generativelanguage.googleapis.com/v1beta/interactions"
 
-        const val modelName = "gemini-3.5-flash"
+        const val modelName =
+            "gemini-3.5-flash"
 
         val responseSchema = JSONObject()
             .put("type", "object")
             .put(
                 "properties",
                 JSONObject()
-                    .put("possibleIssue", stringSchema("The possible condition, or Insufficient evidence from photo."))
-                    .put("confidence", stringSchema("Low, medium, or high confidence for this initial screening."))
-                    .put("observedSigns", stringListSchema("Visible signs from the image only."))
-                    .put("immediateActions", stringListSchema("Low-risk next actions that do not include pesticide brands or doses."))
-                    .put("prevention", stringSchema("Simple prevention or monitoring advice."))
-                    .put("expertAdvice", stringSchema("When or why to contact an agriculture expert."))
-                    .put("disclaimer", stringSchema("A short statement that this is not a confirmed diagnosis."))
+
+                    .put(
+                        "possibleIssue",
+                        stringSchema(
+                            "The possible condition, or the equivalent of 'Insufficient evidence from photo', written in the same language as the farmer."
+                        )
+                    )
+
+                    .put(
+                        "confidence",
+                        stringSchema(
+                            "Low, medium, or high confidence for this initial screening, written in the same language as the farmer."
+                        )
+                    )
+
+                    .put(
+                        "observedSigns",
+                        stringListSchema(
+                            "A short list of visible signs from the image only, written in the same language as the farmer."
+                        )
+                    )
+
+                    .put(
+                        "immediateActions",
+                        stringListSchema(
+                            "A short list of low-risk next actions that do not include pesticide brands or doses, written in the same language as the farmer."
+                        )
+                    )
+
+                    .put(
+                        "prevention",
+                        stringSchema(
+                            "Short and simple prevention or monitoring advice written in the same language as the farmer."
+                        )
+                    )
+
+                    .put(
+                        "expertAdvice",
+                        stringSchema(
+                            "Short advice about when or why to contact an agriculture expert, written in the same language as the farmer."
+                        )
+                    )
+
+                    .put(
+                        "disclaimer",
+                        stringSchema(
+                            "A short statement that this is not a confirmed diagnosis, written in the same language as the farmer."
+                        )
+                    )
             )
             .put(
                 "required",
@@ -234,13 +425,20 @@ class PlantAiRepository {
                     .put("disclaimer")
             )
 
-        fun stringSchema(description: String) = JSONObject()
+        fun stringSchema(
+            description: String
+        ) = JSONObject()
             .put("type", "string")
             .put("description", description)
 
-        fun stringListSchema(description: String) = JSONObject()
+        fun stringListSchema(
+            description: String
+        ) = JSONObject()
             .put("type", "array")
             .put("description", description)
-            .put("items", JSONObject().put("type", "string"))
+            .put(
+                "items",
+                JSONObject().put("type", "string")
+            )
     }
 }

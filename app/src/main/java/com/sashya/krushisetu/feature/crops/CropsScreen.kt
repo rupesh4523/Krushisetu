@@ -23,6 +23,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -81,8 +83,19 @@ fun CropsScreen(
         mutableStateOf<String?>(null)
     }
 
+    // Controls Add Crop dialog
     var showAddCropDialog by remember {
         mutableStateOf(false)
+    }
+
+    // Stores the crop currently being edited
+    var cropBeingEdited by remember {
+        mutableStateOf<Crop?>(null)
+    }
+
+    // Stores the crop waiting for delete confirmation
+    var cropBeingDeleted by remember {
+        mutableStateOf<Crop?>(null)
     }
 
     // =========================================================
@@ -163,11 +176,17 @@ fun CropsScreen(
 
                 Button(
                     onClick = {
+
+                        // Make sure we are in ADD mode,
+                        // not EDIT mode.
+                        cropBeingEdited = null
                         showAddCropDialog = true
                     },
+
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
+
                     shape = RoundedCornerShape(16.dp)
                 ) {
 
@@ -296,7 +315,22 @@ fun CropsScreen(
                     ) { crop ->
 
                         CropCard(
-                            crop = crop
+                            crop = crop,
+
+                            onEdit = {
+
+                                // Put this crop into edit mode
+                                cropBeingEdited = crop
+
+                                // Open the same dialog
+                                showAddCropDialog = true
+                            },
+
+                            onDelete = {
+
+                                // Open delete confirmation
+                                cropBeingDeleted = crop
+                            }
                         )
                     }
                 }
@@ -305,32 +339,143 @@ fun CropsScreen(
     }
 
     // =========================================================
-    // ADD CROP DIALOG
+    // ADD / EDIT CROP DIALOG
     // =========================================================
 
     if (showAddCropDialog) {
 
         AddCropDialog(
+            initialCrop = cropBeingEdited,
 
             onDismiss = {
+
                 showAddCropDialog = false
+                cropBeingEdited = null
             },
 
             onSave = { crop ->
 
-                cropRepository.addCrop(crop) { result ->
+                // =================================================
+                // EDIT EXISTING CROP
+                // =================================================
 
-                    result.onSuccess {
+                if (cropBeingEdited != null) {
 
-                        showAddCropDialog = false
-                        errorMessage = null
+                    cropRepository.updateCrop(crop) { result ->
 
-                    }.onFailure { exception ->
+                        result.onSuccess {
 
-                        errorMessage =
-                            exception.localizedMessage
-                                ?: "Unable to save the crop."
+                            showAddCropDialog = false
+                            cropBeingEdited = null
+                            errorMessage = null
+
+                        }.onFailure { exception ->
+
+                            errorMessage =
+                                exception.localizedMessage
+                                    ?: "Unable to update the crop."
+                        }
                     }
+
+                }
+
+                // =================================================
+                // ADD NEW CROP
+                // =================================================
+
+                else {
+
+                    cropRepository.addCrop(crop) { result ->
+
+                        result.onSuccess {
+
+                            showAddCropDialog = false
+                            errorMessage = null
+
+                        }.onFailure { exception ->
+
+                            errorMessage =
+                                exception.localizedMessage
+                                    ?: "Unable to save the crop."
+                        }
+                    }
+                }
+            }
+        )
+    }
+
+    // =========================================================
+    // DELETE CONFIRMATION DIALOG
+    // =========================================================
+
+    if (cropBeingDeleted != null) {
+
+        val crop = cropBeingDeleted!!
+
+        AlertDialog(
+
+            onDismissRequest = {
+                cropBeingDeleted = null
+            },
+
+            title = {
+
+                Text(
+                    text = "Delete crop?",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+
+            text = {
+
+                Text(
+                    text =
+                        "Are you sure you want to delete \"${crop.name}\"?\n\n" +
+                                "This action cannot be undone."
+                )
+            },
+
+            confirmButton = {
+
+                TextButton(
+
+                    onClick = {
+
+                        cropRepository.deleteCrop(
+                            crop.id
+                        ) { result ->
+
+                            result.onSuccess {
+
+                                cropBeingDeleted = null
+                                errorMessage = null
+
+                            }.onFailure { exception ->
+
+                                errorMessage =
+                                    exception.localizedMessage
+                                        ?: "Unable to delete the crop."
+
+                                cropBeingDeleted = null
+                            }
+                        }
+                    }
+                ) {
+
+                    Text("Delete")
+                }
+            },
+
+            dismissButton = {
+
+                TextButton(
+
+                    onClick = {
+                        cropBeingDeleted = null
+                    }
+                ) {
+
+                    Text("Cancel")
                 }
             }
         )
@@ -344,8 +489,15 @@ fun CropsScreen(
 
 @Composable
 private fun CropCard(
-    crop: Crop
+    crop: Crop,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
 ) {
+
+    // Menu state for this particular crop card
+    var showMenu by remember {
+        mutableStateOf(false)
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -401,6 +553,69 @@ private fun CropCard(
 
                             style =
                                 MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+
+                // =================================================
+                // THREE DOT MENU
+                // =================================================
+
+                Box {
+
+                    TextButton(
+                        onClick = {
+                            showMenu = true
+                        }
+                    ) {
+
+                        Text(
+                            text = "⋮",
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = showMenu,
+
+                        onDismissRequest = {
+                            showMenu = false
+                        }
+                    ) {
+
+                        // -----------------------------------------
+                        // EDIT
+                        // -----------------------------------------
+
+                        DropdownMenuItem(
+
+                            text = {
+                                Text("Edit crop")
+                            },
+
+                            onClick = {
+
+                                showMenu = false
+                                onEdit()
+                            }
+                        )
+
+                        // -----------------------------------------
+                        // DELETE
+                        // -----------------------------------------
+
+                        DropdownMenuItem(
+
+                            text = {
+                                Text("Delete crop")
+                            },
+
+                            onClick = {
+
+                                showMenu = false
+                                onDelete()
+                            }
                         )
                     }
                 }
@@ -504,12 +719,13 @@ private fun CropCard(
 
 
 // =============================================================
-// ADD CROP DIALOG
+// ADD / EDIT CROP DIALOG
 // =============================================================
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddCropDialog(
+    initialCrop: Crop? = null,
     onDismiss: () -> Unit,
     onSave: (Crop) -> Unit
 ) {
@@ -518,28 +734,40 @@ private fun AddCropDialog(
     // FORM STATE
     // =========================================================
 
-    var name by remember {
-        mutableStateOf("")
+    var name by remember(initialCrop) {
+        mutableStateOf(
+            initialCrop?.name ?: ""
+        )
     }
 
-    var variety by remember {
-        mutableStateOf("")
+    var variety by remember(initialCrop) {
+        mutableStateOf(
+            initialCrop?.variety ?: ""
+        )
     }
 
-    var stage by remember {
-        mutableStateOf("")
+    var stage by remember(initialCrop) {
+        mutableStateOf(
+            initialCrop?.stage ?: ""
+        )
     }
 
-    var area by remember {
-        mutableStateOf("")
+    var area by remember(initialCrop) {
+        mutableStateOf(
+            initialCrop?.area ?: ""
+        )
     }
 
-    var healthEmoji by remember {
-        mutableStateOf("🌱")
+    var healthEmoji by remember(initialCrop) {
+        mutableStateOf(
+            initialCrop?.healthEmoji ?: "🌱"
+        )
     }
 
-    var plantingDate by remember {
-        mutableStateOf("")
+    var plantingDate by remember(initialCrop) {
+        mutableStateOf(
+            initialCrop?.plantingDate ?: ""
+        )
     }
 
     var showDatePicker by remember {
@@ -561,7 +789,12 @@ private fun AddCropDialog(
         title = {
 
             Text(
-                text = "Add a crop",
+                text = if (initialCrop == null) {
+                    "Add a crop"
+                } else {
+                    "Edit crop"
+                },
+
                 fontWeight = FontWeight.Bold
             )
         },
@@ -587,6 +820,7 @@ private fun AddCropDialog(
                     value = name,
 
                     onValueChange = {
+
                         name = it
                         validationMessage = null
                     },
@@ -640,6 +874,7 @@ private fun AddCropDialog(
                     value = stage,
 
                     onValueChange = {
+
                         stage = it
                         validationMessage = null
                     },
@@ -698,8 +933,7 @@ private fun AddCropDialog(
                     },
 
                     modifier =
-                        Modifier
-                            .fillMaxWidth(),
+                        Modifier.fillMaxWidth(),
 
                     label = {
                         Text("Planting date")
@@ -771,7 +1005,7 @@ private fun AddCropDialog(
         },
 
         // =========================================================
-        // SAVE BUTTON
+        // SAVE / UPDATE BUTTON
         // =========================================================
 
         confirmButton = {
@@ -779,6 +1013,10 @@ private fun AddCropDialog(
             TextButton(
 
                 onClick = {
+
+                    // ---------------------------------------------
+                    // VALIDATE CROP NAME
+                    // ---------------------------------------------
 
                     if (name.isBlank()) {
 
@@ -788,6 +1026,10 @@ private fun AddCropDialog(
                         return@TextButton
                     }
 
+                    // ---------------------------------------------
+                    // VALIDATE GROWTH STAGE
+                    // ---------------------------------------------
+
                     if (stage.isBlank()) {
 
                         validationMessage =
@@ -795,6 +1037,10 @@ private fun AddCropDialog(
 
                         return@TextButton
                     }
+
+                    // ---------------------------------------------
+                    // VALIDATE PLANTING DATE
+                    // ---------------------------------------------
 
                     if (plantingDate.isBlank()) {
 
@@ -804,7 +1050,18 @@ private fun AddCropDialog(
                         return@TextButton
                     }
 
+                    // ---------------------------------------------
+                    // CREATE CROP OBJECT
+                    // ---------------------------------------------
+
                     val crop = Crop(
+
+                        // IMPORTANT:
+                        // Keep the existing ID while editing.
+                        // For a new crop the ID remains blank,
+                        // and CropRepository generates one.
+
+                        id = initialCrop?.id ?: "",
 
                         name =
                             name.trim(),
@@ -833,7 +1090,13 @@ private fun AddCropDialog(
                 }
             ) {
 
-                Text("Save crop")
+                Text(
+                    if (initialCrop == null) {
+                        "Save crop"
+                    } else {
+                        "Update crop"
+                    }
+                )
             }
         },
 

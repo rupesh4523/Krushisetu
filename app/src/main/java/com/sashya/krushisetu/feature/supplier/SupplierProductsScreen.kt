@@ -11,16 +11,21 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,21 +35,33 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
 import com.sashya.krushisetu.ui.theme.FieldCream
 import com.sashya.krushisetu.ui.theme.LeafGreen
 import com.sashya.krushisetu.ui.theme.MutedText
 
 private data class SupplierProduct(
+    val id: String,
     val name: String,
+    val description: String,
     val category: String,
-    val price: String,
-    val stock: String
+    val price: Double,
+    val stock: Long
 )
 
 @Composable
 fun SupplierProductsScreen(
     onBack: () -> Unit
 ) {
+    val firestore = remember {
+        FirebaseFirestore.getInstance()
+    }
+
+    val supplierId = FirebaseAuth.getInstance()
+        .currentUser
+        ?.uid
 
     var searchText by remember {
         mutableStateOf("")
@@ -54,45 +71,100 @@ fun SupplierProductsScreen(
         mutableStateOf("All")
     }
 
-    val products = remember {
-        listOf(
-            SupplierProduct(
-                name = "Premium Wheat Seeds",
-                category = "Seeds",
-                price = "₹450 / kg",
-                stock = "120 kg"
-            ),
-            SupplierProduct(
-                name = "Hybrid Rice Seeds",
-                category = "Seeds",
-                price = "₹520 / kg",
-                stock = "85 kg"
-            ),
-            SupplierProduct(
-                name = "NPK Fertilizer",
-                category = "Fertilizers",
-                price = "₹1,250 / bag",
-                stock = "60 bags"
-            ),
-            SupplierProduct(
-                name = "Organic Fertilizer",
-                category = "Fertilizers",
-                price = "₹850 / bag",
-                stock = "45 bags"
-            ),
-            SupplierProduct(
-                name = "Crop Protection Pesticide",
-                category = "Pesticides",
-                price = "₹680 / litre",
-                stock = "35 litres"
-            ),
-            SupplierProduct(
-                name = "Agricultural Sprayer",
-                category = "Equipment",
-                price = "₹2,400",
-                stock = "18 units"
-            )
-        )
+    var products by remember {
+        mutableStateOf<List<SupplierProduct>>(emptyList())
+    }
+
+    var isLoading by remember {
+        mutableStateOf(true)
+    }
+
+    var errorMessage by remember {
+        mutableStateOf<String?>(null)
+    }
+
+    var showProductDialog by remember {
+        mutableStateOf(false)
+    }
+
+    var editingProduct by remember {
+        mutableStateOf<SupplierProduct?>(null)
+    }
+
+    /*
+     * ============================================================
+     * LOAD ONLY THIS SUPPLIER'S PRODUCTS
+     * ============================================================
+     */
+    DisposableEffect(supplierId) {
+
+        if (supplierId == null) {
+            isLoading = false
+            errorMessage = "Supplier account is not signed in."
+            onDispose { }
+        } else {
+
+            val listener = firestore
+                .collection("products")
+                .whereEqualTo("supplierId", supplierId)
+                .addSnapshotListener { snapshot, error ->
+
+                    if (error != null) {
+                        isLoading = false
+                        errorMessage =
+                            error.localizedMessage
+                                ?: "Unable to load your products."
+                        return@addSnapshotListener
+                    }
+
+                    if (snapshot == null) {
+                        isLoading = false
+                        products = emptyList()
+                        return@addSnapshotListener
+                    }
+
+                    products = snapshot.documents.mapNotNull { document ->
+
+                        val name =
+                            document.getString("productName")
+                                ?: return@mapNotNull null
+
+                        val description =
+                            document.getString("description")
+                                ?: ""
+
+                        val category =
+                            document.getString("category")
+                                ?: "Other"
+
+                        val price =
+                            (document.get("price") as? Number)
+                                ?.toDouble()
+                                ?: 0.0
+
+                        val stock =
+                            (document.get("stock") as? Number)
+                                ?.toLong()
+                                ?: 0L
+
+                        SupplierProduct(
+                            id = document.id,
+                            name = name,
+                            description = description,
+                            category = category,
+                            price = price,
+                            stock = stock
+                        )
+                    }
+
+                    isLoading = false
+                    errorMessage = null
+                }
+
+            onDispose {
+                listener.remove()
+            }
+        }
     }
 
     val categories = listOf(
@@ -106,7 +178,14 @@ fun SupplierProductsScreen(
     val filteredProducts = products.filter { product ->
 
         val matchesSearch =
-            product.name.contains(searchText, ignoreCase = true)
+            product.name.contains(
+                searchText,
+                ignoreCase = true
+            ) ||
+                    product.description.contains(
+                        searchText,
+                        ignoreCase = true
+                    )
 
         val matchesCategory =
             selectedCategory == "All" ||
@@ -119,12 +198,15 @@ fun SupplierProductsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(FieldCream)
-            .padding(horizontal = 20.dp, vertical = 18.dp)
+            .padding(
+                horizontal = 20.dp,
+                vertical = 18.dp
+            )
     ) {
 
-        // ---------------------------------------------------------
+        // =========================================================
         // HEADER
-        // ---------------------------------------------------------
+        // =========================================================
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -165,9 +247,9 @@ fun SupplierProductsScreen(
             modifier = Modifier.height(16.dp)
         )
 
-        // ---------------------------------------------------------
+        // =========================================================
         // SEARCH
-        // ---------------------------------------------------------
+        // =========================================================
 
         OutlinedTextField(
             value = searchText,
@@ -189,9 +271,9 @@ fun SupplierProductsScreen(
             modifier = Modifier.height(14.dp)
         )
 
-        // ---------------------------------------------------------
+        // =========================================================
         // CATEGORY FILTERS
-        // ---------------------------------------------------------
+        // =========================================================
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -277,13 +359,14 @@ fun SupplierProductsScreen(
             modifier = Modifier.height(18.dp)
         )
 
-        // ---------------------------------------------------------
+        // =========================================================
         // ADD PRODUCT
-        // ---------------------------------------------------------
+        // =========================================================
 
         Button(
             onClick = {
-                // Add Product screen will be connected next
+                editingProduct = null
+                showProductDialog = true
             },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
@@ -291,7 +374,6 @@ fun SupplierProductsScreen(
                 containerColor = LeafGreen
             )
         ) {
-
             Text(
                 text = "+ Add New Product",
                 fontWeight = FontWeight.Bold
@@ -302,33 +384,177 @@ fun SupplierProductsScreen(
             modifier = Modifier.height(18.dp)
         )
 
-        // ---------------------------------------------------------
-        // PRODUCT LIST
-        // ---------------------------------------------------------
+        // =========================================================
+        // LOADING
+        // =========================================================
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
+        if (isLoading) {
 
-            items(filteredProducts) { product ->
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
 
-                SupplierProductCard(
-                    product = product
+                CircularProgressIndicator(
+                    color = LeafGreen
                 )
+
+                Spacer(
+                    modifier = Modifier.height(8.dp)
+                )
+
+                Text(
+                    text = "Loading products...",
+                    color = MutedText
+                )
+            }
+
+        } else if (errorMessage != null) {
+
+            Text(
+                text = errorMessage!!,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyLarge
+            )
+
+        } else if (filteredProducts.isEmpty()) {
+
+            Text(
+                text = if (products.isEmpty()) {
+                    "No products added yet."
+                } else {
+                    "No products match your search."
+                },
+                color = MutedText,
+                style = MaterialTheme.typography.bodyLarge
+            )
+
+        } else {
+
+            // =====================================================
+            // PRODUCT LIST
+            // =====================================================
+
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+
+                items(
+                    items = filteredProducts,
+                    key = { it.id }
+                ) { product ->
+
+                    SupplierProductCard(
+                        product = product,
+                        onEdit = {
+                            editingProduct = product
+                            showProductDialog = true
+                        },
+                        onDelete = {
+
+                            firestore
+                                .collection("products")
+                                .document(product.id)
+                                .delete()
+                                .addOnFailureListener { exception ->
+                                    errorMessage =
+                                        exception.localizedMessage
+                                            ?: "Unable to delete product."
+                                }
+                        }
+                    )
+                }
             }
         }
     }
+
+    // =============================================================
+    // ADD / EDIT PRODUCT DIALOG
+    // =============================================================
+
+    if (showProductDialog) {
+
+        ProductDialog(
+            existingProduct = editingProduct,
+
+            onDismiss = {
+                showProductDialog = false
+                editingProduct = null
+            },
+
+            onSave = { name, description, category, price, stock ->
+
+                val currentSupplierId = supplierId
+
+                if (currentSupplierId == null) {
+                    errorMessage =
+                        "Supplier account is not signed in."
+                    showProductDialog = false
+                    return@ProductDialog
+                }
+
+                val data = hashMapOf<String, Any>(
+                    "supplierId" to currentSupplierId,
+                    "productName" to name,
+                    "description" to description,
+                    "category" to category,
+                    "price" to price,
+                    "stock" to stock
+                )
+
+                if (editingProduct == null) {
+
+                    data["createdAt"] =
+                        FieldValue.serverTimestamp()
+
+                    firestore
+                        .collection("products")
+                        .add(data)
+                        .addOnSuccessListener {
+                            errorMessage = null
+                            showProductDialog = false
+                        }
+                        .addOnFailureListener { exception ->
+                            errorMessage =
+                                exception.localizedMessage
+                                    ?: "Unable to add product."
+                        }
+
+                } else {
+
+                    data["updatedAt"] =
+                        FieldValue.serverTimestamp()
+
+                    firestore
+                        .collection("products")
+                        .document(editingProduct!!.id)
+                        .update(data)
+                        .addOnSuccessListener {
+                            errorMessage = null
+                            showProductDialog = false
+                            editingProduct = null
+                        }
+                        .addOnFailureListener { exception ->
+                            errorMessage =
+                                exception.localizedMessage
+                                    ?: "Unable to update product."
+                        }
+                }
+            }
+        )
+    }
 }
 
-
-// -------------------------------------------------------------
+// ================================================================
 // PRODUCT CARD
-// -------------------------------------------------------------
+// ================================================================
 
 @Composable
 private fun SupplierProductCard(
-    product: SupplierProduct
+    product: SupplierProduct,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
 ) {
 
     Card(
@@ -374,8 +600,21 @@ private fun SupplierProductCard(
                 }
 
                 Text(
-                    text = product.price,
+                    text = "₹${String.format("%.2f", product.price)}",
                     fontWeight = FontWeight.Bold
+                )
+            }
+
+            if (product.description.isNotBlank()) {
+
+                Spacer(
+                    modifier = Modifier.height(8.dp)
+                )
+
+                Text(
+                    text = product.description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MutedText
                 )
             }
 
@@ -399,16 +638,258 @@ private fun SupplierProductCard(
             ) {
 
                 TextButton(
-                    onClick = {
-                        // Product details/edit will be connected next
-                    }
+                    onClick = onEdit
                 ) {
                     Text(
-                        text = "View / Edit",
+                        text = "Edit",
                         color = LeafGreen
+                    )
+                }
+
+                TextButton(
+                    onClick = onDelete
+                ) {
+                    Text(
+                        text = "Delete",
+                        color = MaterialTheme.colorScheme.error
                     )
                 }
             }
         }
     }
+}
+
+// ================================================================
+// PRODUCT DIALOG
+// ================================================================
+
+@Composable
+private fun ProductDialog(
+    existingProduct: SupplierProduct?,
+    onDismiss: () -> Unit,
+    onSave: (
+        name: String,
+        description: String,
+        category: String,
+        price: Double,
+        stock: Long
+    ) -> Unit
+) {
+
+    var name by remember(existingProduct) {
+        mutableStateOf(
+            existingProduct?.name ?: ""
+        )
+    }
+
+    var description by remember(existingProduct) {
+        mutableStateOf(
+            existingProduct?.description ?: ""
+        )
+    }
+
+    var category by remember(existingProduct) {
+        mutableStateOf(
+            existingProduct?.category ?: ""
+        )
+    }
+
+    var price by remember(existingProduct) {
+        mutableStateOf(
+            existingProduct?.price?.toString() ?: ""
+        )
+    }
+
+    var stock by remember(existingProduct) {
+        mutableStateOf(
+            existingProduct?.stock?.toString() ?: ""
+        )
+    }
+
+    var validationMessage by remember {
+        mutableStateOf<String?>(null)
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+
+        title = {
+            Text(
+                text =
+                    if (existingProduct == null) {
+                        "Add New Product"
+                    } else {
+                        "Edit Product"
+                    },
+                fontWeight = FontWeight.Bold
+            )
+        },
+
+        text = {
+
+            Column(
+                modifier = Modifier
+                    .verticalScroll(
+                        rememberScrollState()
+                    ),
+                verticalArrangement =
+                    Arrangement.spacedBy(10.dp)
+            ) {
+
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = {
+                        name = it
+                        validationMessage = null
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = {
+                        Text("Product name")
+                    },
+                    placeholder = {
+                        Text("Example: Premium Wheat Seeds")
+                    },
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = {
+                        description = it
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = {
+                        Text("Description")
+                    },
+                    placeholder = {
+                        Text("Describe the product")
+                    }
+                )
+
+                OutlinedTextField(
+                    value = category,
+                    onValueChange = {
+                        category = it
+                        validationMessage = null
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = {
+                        Text("Category")
+                    },
+                    placeholder = {
+                        Text("Seeds / Fertilizers / Pesticides / Equipment")
+                    },
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = price,
+                    onValueChange = {
+                        price = it
+                        validationMessage = null
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = {
+                        Text("Price (₹)")
+                    },
+                    placeholder = {
+                        Text("450")
+                    },
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = stock,
+                    onValueChange = {
+                        stock = it
+                        validationMessage = null
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = {
+                        Text("Available stock")
+                    },
+                    placeholder = {
+                        Text("120")
+                    },
+                    singleLine = true
+                )
+
+                if (validationMessage != null) {
+
+                    Text(
+                        text = validationMessage!!,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        },
+
+        confirmButton = {
+
+            TextButton(
+                onClick = {
+
+                    if (name.isBlank()) {
+                        validationMessage =
+                            "Please enter the product name."
+                        return@TextButton
+                    }
+
+                    if (category.isBlank()) {
+                        validationMessage =
+                            "Please enter the category."
+                        return@TextButton
+                    }
+
+                    val parsedPrice =
+                        price.toDoubleOrNull()
+
+                    if (parsedPrice == null ||
+                        parsedPrice < 0
+                    ) {
+                        validationMessage =
+                            "Please enter a valid price."
+                        return@TextButton
+                    }
+
+                    val parsedStock =
+                        stock.toLongOrNull()
+
+                    if (parsedStock == null ||
+                        parsedStock < 0
+                    ) {
+                        validationMessage =
+                            "Please enter valid stock."
+                        return@TextButton
+                    }
+
+                    onSave(
+                        name.trim(),
+                        description.trim(),
+                        category.trim(),
+                        parsedPrice,
+                        parsedStock
+                    )
+                }
+            ) {
+                Text(
+                    text =
+                        if (existingProduct == null) {
+                            "Add Product"
+                        } else {
+                            "Save Changes"
+                        }
+                )
+            }
+        },
+
+        dismissButton = {
+
+            TextButton(
+                onClick = onDismiss
+            ) {
+                Text("Cancel")
+            }
+        }
+    )
 }
