@@ -12,14 +12,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -42,14 +46,17 @@ import com.sashya.krushisetu.ui.theme.FieldCream
 import com.sashya.krushisetu.ui.theme.LeafGreen
 import com.sashya.krushisetu.ui.theme.MutedText
 
+
 private data class SupplierProduct(
     val id: String,
     val name: String,
     val description: String,
     val category: String,
+    val packsize: String,
     val price: Double,
     val stock: Long
 )
+
 
 @Composable
 fun SupplierProductsScreen(
@@ -91,17 +98,20 @@ fun SupplierProductsScreen(
         mutableStateOf<SupplierProduct?>(null)
     }
 
-    /*
-     * ============================================================
-     * LOAD ONLY THIS SUPPLIER'S PRODUCTS
-     * ============================================================
-     */
+
+    // =============================================================
+    // LOAD ONLY THIS SUPPLIER'S PRODUCTS
+    // =============================================================
+
     DisposableEffect(supplierId) {
 
         if (supplierId == null) {
+
             isLoading = false
             errorMessage = "Supplier account is not signed in."
+
             onDispose { }
+
         } else {
 
             val listener = firestore
@@ -110,16 +120,21 @@ fun SupplierProductsScreen(
                 .addSnapshotListener { snapshot, error ->
 
                     if (error != null) {
+
                         isLoading = false
+
                         errorMessage =
                             error.localizedMessage
                                 ?: "Unable to load your products."
+
                         return@addSnapshotListener
                     }
 
                     if (snapshot == null) {
+
                         isLoading = false
                         products = emptyList()
+
                         return@addSnapshotListener
                     }
 
@@ -137,6 +152,14 @@ fun SupplierProductsScreen(
                             document.getString("category")
                                 ?: "Other"
 
+                        // -------------------------------------------------
+                        // PACK SIZE
+                        // -------------------------------------------------
+
+                        val packsize =
+                            document.getString("packSize")
+                                ?: ""
+
                         val price =
                             (document.get("price") as? Number)
                                 ?.toDouble()
@@ -152,6 +175,7 @@ fun SupplierProductsScreen(
                             name = name,
                             description = description,
                             category = category,
+                            packsize = packsize,
                             price = price,
                             stock = stock
                         )
@@ -167,13 +191,23 @@ fun SupplierProductsScreen(
         }
     }
 
+
+    // =============================================================
+    // CATEGORY FILTERS
+    // =============================================================
+
     val categories = listOf(
         "All",
         "Seeds",
         "Fertilizers",
         "Pesticides",
-        "Equipment"
+        "Tonic"
     )
+
+
+    // =============================================================
+    // FILTER PRODUCTS
+    // =============================================================
 
     val filteredProducts = products.filter { product ->
 
@@ -185,6 +219,10 @@ fun SupplierProductsScreen(
                     product.description.contains(
                         searchText,
                         ignoreCase = true
+                    ) ||
+                    product.packsize.contains(
+                        searchText,
+                        ignoreCase = true
                     )
 
         val matchesCategory =
@@ -193,6 +231,11 @@ fun SupplierProductsScreen(
 
         matchesSearch && matchesCategory
     }
+
+
+    // =============================================================
+    // MAIN SCREEN
+    // =============================================================
 
     Column(
         modifier = Modifier
@@ -235,6 +278,7 @@ fun SupplierProductsScreen(
             TextButton(
                 onClick = onBack
             ) {
+
                 Text(
                     text = "Back",
                     color = LeafGreen,
@@ -243,9 +287,11 @@ fun SupplierProductsScreen(
             }
         }
 
+
         Spacer(
             modifier = Modifier.height(16.dp)
         )
+
 
         // =========================================================
         // SEARCH
@@ -267,9 +313,11 @@ fun SupplierProductsScreen(
             shape = RoundedCornerShape(12.dp)
         )
 
+
         Spacer(
             modifier = Modifier.height(14.dp)
         )
+
 
         // =========================================================
         // CATEGORY FILTERS
@@ -303,6 +351,7 @@ fun SupplierProductsScreen(
                             }
                     )
                 ) {
+
                     Text(
                         text = category,
                         fontWeight = FontWeight.SemiBold
@@ -311,9 +360,11 @@ fun SupplierProductsScreen(
             }
         }
 
+
         Spacer(
             modifier = Modifier.height(8.dp)
         )
+
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -343,6 +394,7 @@ fun SupplierProductsScreen(
                             }
                     )
                 ) {
+
                     Text(
                         text = category,
                         fontWeight = FontWeight.SemiBold
@@ -355,9 +407,11 @@ fun SupplierProductsScreen(
             )
         }
 
+
         Spacer(
             modifier = Modifier.height(18.dp)
         )
+
 
         // =========================================================
         // ADD PRODUCT
@@ -374,15 +428,18 @@ fun SupplierProductsScreen(
                 containerColor = LeafGreen
             )
         ) {
+
             Text(
                 text = "+ Add New Product",
                 fontWeight = FontWeight.Bold
             )
         }
 
+
         Spacer(
             modifier = Modifier.height(18.dp)
         )
+
 
         // =========================================================
         // LOADING
@@ -447,10 +504,12 @@ fun SupplierProductsScreen(
 
                     SupplierProductCard(
                         product = product,
+
                         onEdit = {
                             editingProduct = product
                             showProductDialog = true
                         },
+
                         onDelete = {
 
                             firestore
@@ -458,6 +517,7 @@ fun SupplierProductsScreen(
                                 .document(product.id)
                                 .delete()
                                 .addOnFailureListener { exception ->
+
                                     errorMessage =
                                         exception.localizedMessage
                                             ?: "Unable to delete product."
@@ -468,6 +528,7 @@ fun SupplierProductsScreen(
             }
         }
     }
+
 
     // =============================================================
     // ADD / EDIT PRODUCT DIALOG
@@ -483,14 +544,23 @@ fun SupplierProductsScreen(
                 editingProduct = null
             },
 
-            onSave = { name, description, category, price, stock ->
+            onSave = {
+                    name,
+                    description,
+                    category,
+                    packsize,
+                    price,
+                    stock ->
 
                 val currentSupplierId = supplierId
 
                 if (currentSupplierId == null) {
+
                     errorMessage =
                         "Supplier account is not signed in."
+
                     showProductDialog = false
+
                     return@ProductDialog
                 }
 
@@ -499,9 +569,11 @@ fun SupplierProductsScreen(
                     "productName" to name,
                     "description" to description,
                     "category" to category,
+                    "packSize" to packsize,
                     "price" to price,
                     "stock" to stock
                 )
+
 
                 if (editingProduct == null) {
 
@@ -512,10 +584,12 @@ fun SupplierProductsScreen(
                         .collection("products")
                         .add(data)
                         .addOnSuccessListener {
+
                             errorMessage = null
                             showProductDialog = false
                         }
                         .addOnFailureListener { exception ->
+
                             errorMessage =
                                 exception.localizedMessage
                                     ?: "Unable to add product."
@@ -531,11 +605,13 @@ fun SupplierProductsScreen(
                         .document(editingProduct!!.id)
                         .update(data)
                         .addOnSuccessListener {
+
                             errorMessage = null
                             showProductDialog = false
                             editingProduct = null
                         }
                         .addOnFailureListener { exception ->
+
                             errorMessage =
                                 exception.localizedMessage
                                     ?: "Unable to update product."
@@ -545,6 +621,7 @@ fun SupplierProductsScreen(
         )
     }
 }
+
 
 // ================================================================
 // PRODUCT CARD
@@ -597,6 +674,19 @@ private fun SupplierProductCard(
                         style = MaterialTheme.typography.bodyMedium,
                         color = LeafGreen
                     )
+
+                    if (product.packsize.isNotBlank()) {
+
+                        Spacer(
+                            modifier = Modifier.height(2.dp)
+                        )
+
+                        Text(
+                            text = "Pack size: ${product.packsize}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MutedText
+                        )
+                    }
                 }
 
                 Text(
@@ -604,6 +694,7 @@ private fun SupplierProductCard(
                     fontWeight = FontWeight.Bold
                 )
             }
+
 
             if (product.description.isNotBlank()) {
 
@@ -618,9 +709,11 @@ private fun SupplierProductCard(
                 )
             }
 
+
             Spacer(
                 modifier = Modifier.height(10.dp)
             )
+
 
             Text(
                 text = "Available stock: ${product.stock}",
@@ -628,9 +721,11 @@ private fun SupplierProductCard(
                 color = MutedText
             )
 
+
             Spacer(
                 modifier = Modifier.height(10.dp)
             )
+
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -640,15 +735,18 @@ private fun SupplierProductCard(
                 TextButton(
                     onClick = onEdit
                 ) {
+
                     Text(
                         text = "Edit",
                         color = LeafGreen
                     )
                 }
 
+
                 TextButton(
                     onClick = onDelete
                 ) {
+
                     Text(
                         text = "Delete",
                         color = MaterialTheme.colorScheme.error
@@ -659,10 +757,12 @@ private fun SupplierProductCard(
     }
 }
 
+
 // ================================================================
 // PRODUCT DIALOG
 // ================================================================
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProductDialog(
     existingProduct: SupplierProduct?,
@@ -671,10 +771,52 @@ private fun ProductDialog(
         name: String,
         description: String,
         category: String,
+        packsize: String,
         price: Double,
         stock: Long
     ) -> Unit
 ) {
+
+    // =============================================================
+    // AVAILABLE CATEGORIES
+    // =============================================================
+
+    val categories = listOf(
+        "Seeds",
+        "Fertilizers",
+        "Pesticides",
+        "Tonic"
+    )
+
+
+    // =============================================================
+    // CATEGORY NORMALIZATION
+    // =============================================================
+
+    fun normalizeCategory(value: String): String {
+
+        return when (value.trim().lowercase()) {
+
+            "seed",
+            "seeds" -> "Seeds"
+
+            "fertilizer",
+            "fertilizers" -> "Fertilizers"
+
+            "pesticide",
+            "pesticides" -> "Pesticides"
+
+            "tonic",
+            "tonics" -> "Tonic"
+
+            else -> ""
+        }
+    }
+
+
+    // =============================================================
+    // FORM STATE
+    // =============================================================
 
     var name by remember(existingProduct) {
         mutableStateOf(
@@ -682,17 +824,33 @@ private fun ProductDialog(
         )
     }
 
+
     var description by remember(existingProduct) {
         mutableStateOf(
             existingProduct?.description ?: ""
         )
     }
 
+
     var category by remember(existingProduct) {
         mutableStateOf(
-            existingProduct?.category ?: ""
+            normalizeCategory(
+                existingProduct?.category ?: ""
+            )
         )
     }
+
+
+    // =============================================================
+    // PACK SIZE
+    // =============================================================
+
+    var packsize by remember(existingProduct) {
+        mutableStateOf(
+            existingProduct?.packsize ?: ""
+        )
+    }
+
 
     var price by remember(existingProduct) {
         mutableStateOf(
@@ -700,20 +858,37 @@ private fun ProductDialog(
         )
     }
 
+
     var stock by remember(existingProduct) {
         mutableStateOf(
             existingProduct?.stock?.toString() ?: ""
         )
     }
 
+
+    // =============================================================
+    // DROPDOWN STATE
+    // =============================================================
+
+    var categoryExpanded by remember {
+        mutableStateOf(false)
+    }
+
+
     var validationMessage by remember {
         mutableStateOf<String?>(null)
     }
+
+
+    // =============================================================
+    // DIALOG
+    // =============================================================
 
     AlertDialog(
         onDismissRequest = onDismiss,
 
         title = {
+
             Text(
                 text =
                     if (existingProduct == null) {
@@ -721,9 +896,11 @@ private fun ProductDialog(
                     } else {
                         "Edit Product"
                     },
+
                 fontWeight = FontWeight.Bold
             )
         },
+
 
         text = {
 
@@ -732,87 +909,213 @@ private fun ProductDialog(
                     .verticalScroll(
                         rememberScrollState()
                     ),
+
                 verticalArrangement =
                     Arrangement.spacedBy(10.dp)
             ) {
 
+                // =================================================
+                // PRODUCT NAME
+                // =================================================
+
                 OutlinedTextField(
                     value = name,
+
                     onValueChange = {
                         name = it
                         validationMessage = null
                     },
+
                     modifier = Modifier.fillMaxWidth(),
+
                     label = {
                         Text("Product name")
                     },
+
                     placeholder = {
                         Text("Example: Premium Wheat Seeds")
                     },
+
                     singleLine = true
                 )
 
+
+                // =================================================
+                // DESCRIPTION
+                // =================================================
+
                 OutlinedTextField(
                     value = description,
+
                     onValueChange = {
                         description = it
                     },
+
                     modifier = Modifier.fillMaxWidth(),
+
                     label = {
                         Text("Description")
                     },
+
                     placeholder = {
                         Text("Describe the product")
                     }
                 )
 
+
+                // =================================================
+                // CATEGORY DROPDOWN
+                // =================================================
+
+                ExposedDropdownMenuBox(
+                    expanded = categoryExpanded,
+
+                    onExpandedChange = {
+                        categoryExpanded = !categoryExpanded
+                    },
+
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+
+                    OutlinedTextField(
+                        value = category,
+
+                        onValueChange = {},
+
+                        readOnly = true,
+
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(),
+
+                        label = {
+                            Text("Category")
+                        },
+
+                        placeholder = {
+                            Text("Select category")
+                        },
+
+                        singleLine = true,
+
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(
+                                expanded = categoryExpanded
+                            )
+                        }
+                    )
+
+
+                    ExposedDropdownMenu(
+                        expanded = categoryExpanded,
+
+                        onDismissRequest = {
+                            categoryExpanded = false
+                        }
+                    ) {
+
+                        categories.forEach { item ->
+
+                            DropdownMenuItem(
+                                text = {
+                                    Text(item)
+                                },
+
+                                onClick = {
+
+                                    category = item
+
+                                    categoryExpanded = false
+
+                                    validationMessage = null
+                                }
+                            )
+                        }
+                    }
+                }
+
+
+                // =================================================
+                // PACK SIZE
+                // =================================================
+
                 OutlinedTextField(
-                    value = category,
+                    value = packsize,
+
                     onValueChange = {
-                        category = it
+                        packsize = it
                         validationMessage = null
                     },
+
                     modifier = Modifier.fillMaxWidth(),
+
                     label = {
-                        Text("Category")
+                        Text("Pack size")
                     },
+
                     placeholder = {
-                        Text("Seeds / Fertilizers / Pesticides / Equipment")
+                        Text("Example: 450 ml, 1 kg, 500 g")
                     },
+
                     singleLine = true
                 )
 
+
+                // =================================================
+                // PRICE
+                // =================================================
+
                 OutlinedTextField(
                     value = price,
+
                     onValueChange = {
                         price = it
                         validationMessage = null
                     },
+
                     modifier = Modifier.fillMaxWidth(),
+
                     label = {
                         Text("Price (₹)")
                     },
+
                     placeholder = {
                         Text("450")
                     },
+
                     singleLine = true
                 )
 
+
+                // =================================================
+                // STOCK
+                // =================================================
+
                 OutlinedTextField(
                     value = stock,
+
                     onValueChange = {
                         stock = it
                         validationMessage = null
                     },
+
                     modifier = Modifier.fillMaxWidth(),
+
                     label = {
                         Text("Available stock")
                     },
+
                     placeholder = {
                         Text("120")
                     },
+
                     singleLine = true
                 )
+
+
+                // =================================================
+                // VALIDATION
+                // =================================================
 
                 if (validationMessage != null) {
 
@@ -824,54 +1127,86 @@ private fun ProductDialog(
             }
         },
 
+
+        // =========================================================
+        // SAVE
+        // =========================================================
+
         confirmButton = {
 
             TextButton(
                 onClick = {
 
                     if (name.isBlank()) {
+
                         validationMessage =
                             "Please enter the product name."
+
                         return@TextButton
                     }
 
+
                     if (category.isBlank()) {
+
                         validationMessage =
-                            "Please enter the category."
+                            "Please select a category."
+
                         return@TextButton
                     }
+
+
+                    if (packsize.isBlank()) {
+
+                        validationMessage =
+                            "Please enter the pack size."
+
+                        return@TextButton
+                    }
+
 
                     val parsedPrice =
                         price.toDoubleOrNull()
 
-                    if (parsedPrice == null ||
+
+                    if (
+                        parsedPrice == null ||
                         parsedPrice < 0
                     ) {
+
                         validationMessage =
                             "Please enter a valid price."
+
                         return@TextButton
                     }
+
 
                     val parsedStock =
                         stock.toLongOrNull()
 
-                    if (parsedStock == null ||
+
+                    if (
+                        parsedStock == null ||
                         parsedStock < 0
                     ) {
+
                         validationMessage =
                             "Please enter valid stock."
+
                         return@TextButton
                     }
+
 
                     onSave(
                         name.trim(),
                         description.trim(),
                         category.trim(),
+                        packsize.trim(),
                         parsedPrice,
                         parsedStock
                     )
                 }
             ) {
+
                 Text(
                     text =
                         if (existingProduct == null) {
@@ -883,11 +1218,17 @@ private fun ProductDialog(
             }
         },
 
+
+        // =========================================================
+        // CANCEL
+        // =========================================================
+
         dismissButton = {
 
             TextButton(
                 onClick = onDismiss
             ) {
+
                 Text("Cancel")
             }
         }

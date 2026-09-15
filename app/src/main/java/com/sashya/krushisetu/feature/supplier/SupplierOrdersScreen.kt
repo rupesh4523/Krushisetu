@@ -3,6 +3,7 @@ package com.sashya.krushisetu.feature.supplier
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,10 +17,12 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,67 +32,240 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import com.sashya.krushisetu.ui.theme.FieldCream
 import com.sashya.krushisetu.ui.theme.LeafGreen
 import com.sashya.krushisetu.ui.theme.MutedText
+import java.text.SimpleDateFormat
+import java.util.Locale
+
+private data class OrderItem(
+    val productName: String,
+    val quantity: Int,
+    val packSize: String,
+    val price: Double
+)
 
 private data class SupplierOrder(
     val orderId: String,
     val farmerName: String,
-    val product: String,
-    val quantity: Int,
-    val amount: String,
-    val status: String
+    val items: List<OrderItem>,
+    val totalAmount: Double,
+    val status: String,
+    val deliveryAddress: String,
+    val createdAtMillis: Long
 )
 
 @Composable
 fun SupplierOrdersScreen(
     onBack: () -> Unit
 ) {
-
     var selectedStatus by remember {
         mutableStateOf("All")
     }
 
-    val orders = remember {
-        listOf(
-            SupplierOrder(
-                orderId = "KS1024",
-                farmerName = "Ramesh Patil",
-                product = "Wheat Seeds",
-                quantity = 4,
-                amount = "₹1,800",
-                status = "New"
-            ),
-            SupplierOrder(
-                orderId = "KS1023",
-                farmerName = "Suresh More",
-                product = "NPK Fertilizer",
-                quantity = 2,
-                amount = "₹2,500",
-                status = "Processing"
-            ),
-            SupplierOrder(
-                orderId = "KS1022",
-                farmerName = "Anita Sharma",
-                product = "Rice Seeds",
-                quantity = 5,
-                amount = "₹2,600",
-                status = "Dispatched"
-            ),
-            SupplierOrder(
-                orderId = "KS1021",
-                farmerName = "Vijay Pawar",
-                product = "Organic Fertilizer",
-                quantity = 3,
-                amount = "₹2,550",
-                status = "Delivered"
-            )
-        )
+    var orders by remember {
+        mutableStateOf<List<SupplierOrder>>(emptyList())
     }
 
-    val filteredOrders = orders.filter {
-        selectedStatus == "All" || it.status == selectedStatus
+    var isLoading by remember {
+        mutableStateOf(true)
+    }
+
+    var errorMessage by remember {
+        mutableStateOf<String?>(null)
+    }
+
+    val supplierId =
+        FirebaseAuth.getInstance().currentUser?.uid
+
+    DisposableEffect(supplierId) {
+
+        if (supplierId == null) {
+
+            isLoading = false
+            errorMessage = "Supplier is not logged in."
+
+            onDispose { }
+
+        } else {
+
+            val listener: ListenerRegistration =
+                FirebaseFirestore
+                    .getInstance()
+                    .collection("orders")
+                    .whereEqualTo(
+                        "supplierId",
+                        supplierId
+                    )
+                    .addSnapshotListener { snapshot, error ->
+
+                        if (error != null) {
+
+                            isLoading = false
+
+                            errorMessage =
+                                error.message
+                                    ?: "Failed to load orders."
+
+                            return@addSnapshotListener
+                        }
+
+                        if (snapshot == null) {
+
+                            isLoading = false
+                            orders = emptyList()
+
+                            return@addSnapshotListener
+                        }
+
+                        try {
+
+                            val loadedOrders =
+                                snapshot.documents.map { document ->
+
+                                    // ---------------------------------
+                                    // ITEMS
+                                    // ---------------------------------
+
+                                    val rawItems =
+                                        document.get("items")
+                                                as? List<*>
+                                            ?: emptyList<Any>()
+
+                                    val parsedItems =
+                                        rawItems.mapNotNull { rawItem ->
+
+                                            val item =
+                                                rawItem as? Map<*, *>
+                                                    ?: return@mapNotNull null
+
+                                            val productName =
+                                                item["productName"]
+                                                    ?.toString()
+                                                    ?: item["name"]
+                                                        ?.toString()
+                                                    ?: "Product"
+
+                                            val quantity =
+                                                (item["quantity"]
+                                                        as? Number)
+                                                    ?.toInt()
+                                                    ?: 1
+
+                                            val packSize =
+                                                item["packSize"]
+                                                    ?.toString()
+                                                    ?: ""
+
+                                            val price =
+                                                (item["price"]
+                                                        as? Number)
+                                                    ?.toDouble()
+                                                    ?: 0.0
+
+                                            OrderItem(
+                                                productName =
+                                                    productName,
+                                                quantity =
+                                                    quantity,
+                                                packSize =
+                                                    packSize,
+                                                price =
+                                                    price
+                                            )
+                                        }
+
+                                    // ---------------------------------
+                                    // TOTAL
+                                    // ---------------------------------
+
+                                    val totalAmount =
+                                        (document.get("totalAmount")
+                                                as? Number)
+                                            ?.toDouble()
+                                            ?: parsedItems.sumOf {
+                                                it.price *
+                                                        it.quantity
+                                            }
+
+                                    // ---------------------------------
+                                    // CREATED AT
+                                    // ---------------------------------
+
+                                    val createdAtMillis =
+                                        document
+                                            .getTimestamp("createdAt")
+                                            ?.toDate()
+                                            ?.time
+                                            ?: 0L
+
+                                    // ---------------------------------
+                                    // ORDER
+                                    // ---------------------------------
+
+                                    SupplierOrder(
+
+                                        orderId =
+                                            document.id,
+
+                                        farmerName =
+                                            document
+                                                .getString(
+                                                    "farmerName"
+                                                )
+                                                ?: "Farmer",
+
+                                        items =
+                                            parsedItems,
+
+                                        totalAmount =
+                                            totalAmount,
+
+                                        status =
+                                            document
+                                                .getString(
+                                                    "status"
+                                                )
+                                                ?: "New",
+
+                                        deliveryAddress =
+                                            document
+                                                .getString(
+                                                    "deliveryAddress"
+                                                )
+                                                ?: "",
+
+                                        createdAtMillis =
+                                            createdAtMillis
+                                    )
+                                }
+
+                            orders =
+                                loadedOrders
+                                    .sortedByDescending {
+                                        it.createdAtMillis
+                                    }
+
+                            errorMessage = null
+                            isLoading = false
+
+                        } catch (exception: Exception) {
+
+                            isLoading = false
+
+                            errorMessage =
+                                exception.message
+                                    ?: "Failed to read orders."
+                        }
+                    }
+
+            onDispose {
+                listener.remove()
+            }
+        }
     }
 
     val statuses = listOf(
@@ -100,19 +276,36 @@ fun SupplierOrdersScreen(
         "Delivered"
     )
 
+    val filteredOrders =
+        orders.filter { order ->
+
+            selectedStatus == "All" ||
+                    order.status.equals(
+                        selectedStatus,
+                        ignoreCase = true
+                    )
+        }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(FieldCream)
-            .padding(horizontal = 20.dp, vertical = 18.dp)
+            .padding(
+                horizontal = 20.dp,
+                vertical = 18.dp
+            )
     ) {
 
+        // =========================================================
         // HEADER
+        // =========================================================
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            verticalAlignment =
+                Alignment.CenterVertically,
+            horizontalArrangement =
+                Arrangement.SpaceBetween
         ) {
 
             Column(
@@ -121,14 +314,18 @@ fun SupplierOrdersScreen(
 
                 Text(
                     text = "Orders",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
+                    style =
+                        MaterialTheme.typography.headlineSmall,
+                    fontWeight =
+                        FontWeight.Bold,
                     color = LeafGreen
                 )
 
                 Text(
-                    text = "Manage farmer orders and their status",
-                    style = MaterialTheme.typography.bodyMedium,
+                    text =
+                        "Manage farmer orders and their status",
+                    style =
+                        MaterialTheme.typography.bodyMedium,
                     color = MutedText
                 )
             }
@@ -136,10 +333,12 @@ fun SupplierOrdersScreen(
             TextButton(
                 onClick = onBack
             ) {
+
                 Text(
                     text = "Back",
                     color = LeafGreen,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight =
+                        FontWeight.SemiBold
                 )
             }
         }
@@ -148,22 +347,27 @@ fun SupplierOrdersScreen(
             modifier = Modifier.height(18.dp)
         )
 
+        // =========================================================
         // STATUS FILTERS
+        // =========================================================
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement =
+                Arrangement.spacedBy(6.dp)
         ) {
 
             statuses.take(3).forEach { status ->
 
                 OrderFilterButton(
                     text = status,
-                    selected = selectedStatus == status,
+                    selected =
+                        selectedStatus == status,
                     onClick = {
                         selectedStatus = status
                     },
-                    modifier = Modifier.weight(1f)
+                    modifier =
+                        Modifier.weight(1f)
                 )
             }
         }
@@ -174,18 +378,21 @@ fun SupplierOrdersScreen(
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement =
+                Arrangement.spacedBy(6.dp)
         ) {
 
             statuses.drop(3).forEach { status ->
 
                 OrderFilterButton(
                     text = status,
-                    selected = selectedStatus == status,
+                    selected =
+                        selectedStatus == status,
                     onClick = {
                         selectedStatus = status
                     },
-                    modifier = Modifier.weight(1f)
+                    modifier =
+                        Modifier.weight(1f)
                 )
             }
         }
@@ -194,35 +401,188 @@ fun SupplierOrdersScreen(
             modifier = Modifier.height(18.dp)
         )
 
-        Text(
-            text = "${filteredOrders.size} orders",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
-        )
+        // =========================================================
+        // CONTENT
+        // =========================================================
 
-        Spacer(
-            modifier = Modifier.height(10.dp)
-        )
+        when {
 
-        // ORDER LIST
+            // -----------------------------------------------------
+            // LOADING
+            // -----------------------------------------------------
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
+            isLoading -> {
 
-            items(filteredOrders) { order ->
+                Column(
+                    modifier =
+                        Modifier.fillMaxSize(),
+                    horizontalAlignment =
+                        Alignment.CenterHorizontally,
+                    verticalArrangement =
+                        Arrangement.Center
+                ) {
 
-                SupplierOrderCard(order)
+                    CircularProgressIndicator(
+                        color = LeafGreen
+                    )
+
+                    Spacer(
+                        modifier =
+                            Modifier.height(12.dp)
+                    )
+
+                    Text(
+                        text = "Loading orders...",
+                        color = MutedText
+                    )
+                }
+            }
+
+            // -----------------------------------------------------
+            // ERROR
+            // -----------------------------------------------------
+
+            errorMessage != null -> {
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(20.dp),
+                    horizontalAlignment =
+                        Alignment.CenterHorizontally,
+                    verticalArrangement =
+                        Arrangement.Center
+                ) {
+
+                    Text(
+                        text =
+                            "Unable to load orders",
+                        style =
+                            MaterialTheme
+                                .typography
+                                .titleMedium,
+                        fontWeight =
+                            FontWeight.Bold
+                    )
+
+                    Spacer(
+                        modifier =
+                            Modifier.height(8.dp)
+                    )
+
+                    Text(
+                        text =
+                            errorMessage ?: "",
+                        color = MutedText
+                    )
+                }
+            }
+
+            // -----------------------------------------------------
+            // SUCCESS
+            // -----------------------------------------------------
+
+            else -> {
+
+                Text(
+                    text =
+                        "${filteredOrders.size} orders",
+                    style =
+                        MaterialTheme
+                            .typography
+                            .titleMedium,
+                    fontWeight =
+                        FontWeight.Bold
+                )
+
+                Spacer(
+                    modifier =
+                        Modifier.height(10.dp)
+                )
+
+                if (filteredOrders.isEmpty()) {
+
+                    // -------------------------------------------------
+                    // EMPTY
+                    // -------------------------------------------------
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(20.dp),
+                        horizontalAlignment =
+                            Alignment.CenterHorizontally,
+                        verticalArrangement =
+                            Arrangement.Center
+                    ) {
+
+                        Text(
+                            text = "No orders found",
+                            style =
+                                MaterialTheme
+                                    .typography
+                                    .titleMedium,
+                            fontWeight =
+                                FontWeight.Bold
+                        )
+
+                        Spacer(
+                            modifier =
+                                Modifier.height(6.dp)
+                        )
+
+                        Text(
+                            text =
+                                if (
+                                    selectedStatus == "All"
+                                ) {
+                                    "Orders placed by farmers will appear here."
+                                } else {
+                                    "There are no $selectedStatus orders."
+                                },
+                            color = MutedText
+                        )
+                    }
+
+                } else {
+
+                    // -------------------------------------------------
+                    // ORDER LIST
+                    // -------------------------------------------------
+
+                    LazyColumn(
+                        modifier =
+                            Modifier.fillMaxSize(),
+                        verticalArrangement =
+                            Arrangement.spacedBy(12.dp),
+                        contentPadding =
+                            PaddingValues(
+                                bottom = 20.dp
+                            )
+                    ) {
+
+                        items(
+                            items = filteredOrders,
+                            key = {
+                                it.orderId
+                            }
+                        ) { order ->
+
+                            SupplierOrderCard(
+                                order = order
+                            )
+                        }
+                    }
+                }
             }
         }
     }
 }
 
 
-// -------------------------------------------------------------
+// =============================================================
 // FILTER BUTTON
-// -------------------------------------------------------------
+// =============================================================
 
 @Composable
 private fun OrderFilterButton(
@@ -235,29 +595,43 @@ private fun OrderFilterButton(
     Button(
         onClick = onClick,
         modifier = modifier,
-        shape = RoundedCornerShape(10.dp),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(
-            horizontal = 6.dp,
-            vertical = 8.dp
-        ),
-        colors = ButtonDefaults.buttonColors(
-            containerColor =
-                if (selected) LeafGreen else Color.White,
-            contentColor =
-                if (selected) Color.White else LeafGreen
-        )
+        shape =
+            RoundedCornerShape(10.dp),
+        contentPadding =
+            PaddingValues(
+                horizontal = 6.dp,
+                vertical = 8.dp
+            ),
+        colors =
+            ButtonDefaults.buttonColors(
+                containerColor =
+                    if (selected) {
+                        LeafGreen
+                    } else {
+                        Color.White
+                    },
+
+                contentColor =
+                    if (selected) {
+                        Color.White
+                    } else {
+                        LeafGreen
+                    }
+            )
     ) {
+
         Text(
             text = text,
-            fontWeight = FontWeight.SemiBold
+            fontWeight =
+                FontWeight.SemiBold
         )
     }
 }
 
 
-// -------------------------------------------------------------
+// =============================================================
 // ORDER CARD
-// -------------------------------------------------------------
+// =============================================================
 
 @Composable
 private fun SupplierOrderCard(
@@ -265,86 +639,315 @@ private fun SupplierOrderCard(
 ) {
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 2.dp
-        )
+        modifier =
+            Modifier.fillMaxWidth(),
+        shape =
+            RoundedCornerShape(16.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    Color.White
+            ),
+        elevation =
+            CardDefaults.cardElevation(
+                defaultElevation = 2.dp
+            )
     ) {
 
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier =
+                Modifier.padding(16.dp)
         ) {
 
+            // -----------------------------------------------------
+            // ORDER ID + STATUS
+            // -----------------------------------------------------
+
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                modifier =
+                    Modifier.fillMaxWidth(),
+                horizontalArrangement =
+                    Arrangement.SpaceBetween,
+                verticalAlignment =
+                    Alignment.CenterVertically
             ) {
 
                 Text(
-                    text = "#${order.orderId}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    text =
+                        "#${order.orderId}",
+                    style =
+                        MaterialTheme
+                            .typography
+                            .titleMedium,
+                    fontWeight =
+                        FontWeight.Bold
                 )
 
                 Text(
-                    text = order.status,
-                    color = LeafGreen,
-                    fontWeight = FontWeight.Bold
+                    text =
+                        order.status,
+                    color =
+                        LeafGreen,
+                    fontWeight =
+                        FontWeight.Bold
                 )
             }
 
             Spacer(
-                modifier = Modifier.height(10.dp)
+                modifier =
+                    Modifier.height(10.dp)
             )
+
+            // -----------------------------------------------------
+            // FARMER
+            // -----------------------------------------------------
 
             Text(
-                text = order.farmerName,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold
+                text =
+                    order.farmerName,
+                style =
+                    MaterialTheme
+                        .typography
+                        .bodyLarge,
+                fontWeight =
+                    FontWeight.SemiBold
             )
 
-            Spacer(
-                modifier = Modifier.height(4.dp)
-            )
+            // -----------------------------------------------------
+            // DATE
+            // -----------------------------------------------------
 
-            Text(
-                text = "${order.quantity} × ${order.product}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MutedText
-            )
+            if (order.createdAtMillis > 0L) {
 
-            Spacer(
-                modifier = Modifier.height(8.dp)
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-
-                Text(
-                    text = order.amount,
-                    fontWeight = FontWeight.Bold,
-                    color = LeafGreen
+                Spacer(
+                    modifier =
+                        Modifier.height(3.dp)
                 )
 
-                TextButton(
-                    onClick = {
-                        // Order details will be connected next
+                Text(
+                    text =
+                        formatOrderDate(
+                            order.createdAtMillis
+                        ),
+                    style =
+                        MaterialTheme
+                            .typography
+                            .bodySmall,
+                    color =
+                        MutedText
+                )
+            }
+
+            Spacer(
+                modifier =
+                    Modifier.height(12.dp)
+            )
+
+            // -----------------------------------------------------
+            // PRODUCTS
+            // -----------------------------------------------------
+
+            if (order.items.isEmpty()) {
+
+                Text(
+                    text =
+                        "No product details available",
+                    style =
+                        MaterialTheme
+                            .typography
+                            .bodyMedium,
+                    color =
+                        MutedText
+                )
+
+            } else {
+
+                order.items.forEach { item ->
+
+                    Row(
+                        modifier =
+                            Modifier.fillMaxWidth(),
+                        horizontalArrangement =
+                            Arrangement.SpaceBetween
+                    ) {
+
+                        Column(
+                            modifier =
+                                Modifier.weight(1f)
+                        ) {
+
+                            Text(
+                                text =
+                                    "${item.quantity} × ${item.productName}",
+                                style =
+                                    MaterialTheme
+                                        .typography
+                                        .bodyMedium,
+                                fontWeight =
+                                    FontWeight.SemiBold
+                            )
+
+                            if (
+                                item.packSize.isNotBlank()
+                            ) {
+
+                                Text(
+                                    text =
+                                        item.packSize,
+                                    style =
+                                        MaterialTheme
+                                            .typography
+                                            .bodySmall,
+                                    color =
+                                        MutedText
+                                )
+                            }
+                        }
+
+                        Text(
+                            text =
+                                "₹${formatAmount(
+                                    item.price *
+                                            item.quantity
+                                )}",
+                            fontWeight =
+                                FontWeight.SemiBold
+                        )
                     }
-                ) {
-                    Text(
-                        text = "View Order",
-                        color = LeafGreen
+
+                    Spacer(
+                        modifier =
+                            Modifier.height(6.dp)
                     )
                 }
             }
+
+            // -----------------------------------------------------
+            // DELIVERY ADDRESS
+            // -----------------------------------------------------
+
+            if (
+                order.deliveryAddress.isNotBlank()
+            ) {
+
+                Spacer(
+                    modifier =
+                        Modifier.height(6.dp)
+                )
+
+                Text(
+                    text =
+                        "Delivery address",
+                    style =
+                        MaterialTheme
+                            .typography
+                            .bodySmall,
+                    fontWeight =
+                        FontWeight.Bold
+                )
+
+                Spacer(
+                    modifier =
+                        Modifier.height(2.dp)
+                )
+
+                Text(
+                    text =
+                        order.deliveryAddress,
+                    style =
+                        MaterialTheme
+                            .typography
+                            .bodySmall,
+                    color =
+                        MutedText
+                )
+            }
+
+            Spacer(
+                modifier =
+                    Modifier.height(12.dp)
+            )
+
+            // -----------------------------------------------------
+            // TOTAL
+            // -----------------------------------------------------
+
+            Row(
+                modifier =
+                    Modifier.fillMaxWidth(),
+                horizontalArrangement =
+                    Arrangement.SpaceBetween,
+                verticalAlignment =
+                    Alignment.CenterVertically
+            ) {
+
+                Text(
+                    text = "Total",
+                    style =
+                        MaterialTheme
+                            .typography
+                            .titleMedium,
+                    fontWeight =
+                        FontWeight.Bold
+                )
+
+                Text(
+                    text =
+                        "₹${formatAmount(
+                            order.totalAmount
+                        )}",
+                    style =
+                        MaterialTheme
+                            .typography
+                            .titleMedium,
+                    fontWeight =
+                        FontWeight.Bold,
+                    color =
+                        LeafGreen
+                )
+            }
         }
     }
+}
+
+
+// =============================================================
+// HELPERS
+// =============================================================
+
+private fun formatAmount(
+    amount: Double
+): String {
+
+    return if (
+        amount % 1.0 == 0.0
+    ) {
+
+        amount
+            .toLong()
+            .toString()
+
+    } else {
+
+        String.format(
+            Locale.getDefault(),
+            "%.2f",
+            amount
+        )
+    }
+}
+
+private fun formatOrderDate(
+    timeMillis: Long
+): String {
+
+    val formatter =
+        SimpleDateFormat(
+            "dd MMM yyyy, hh:mm a",
+            Locale.getDefault()
+        )
+
+    return formatter.format(
+        timeMillis
+    )
 }
