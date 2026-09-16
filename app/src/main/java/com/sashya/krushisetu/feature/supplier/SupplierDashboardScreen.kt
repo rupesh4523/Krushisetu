@@ -23,16 +23,50 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import com.sashya.krushisetu.ui.theme.FieldCream
 import com.sashya.krushisetu.ui.theme.LeafGreen
 import com.sashya.krushisetu.ui.theme.MutedText
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
+// =============================================================
+// DASHBOARD STATISTICS
+// =============================================================
+
+private data class SupplierDashboardStats(
+    val productCount: Int = 0,
+    val pendingOrders: Int = 0,
+    val deliveries: Int = 0,
+    val revenue: Double = 0.0,
+    val monthlyRevenue: List<MonthlyRevenue> = emptyList()
+)
+
+// =============================================================
+// MONTHLY REVENUE
+// =============================================================
+
+private data class MonthlyRevenue(
+    val month: String,
+    val amount: Double
+)
+
+// =============================================================
+// SUPPLIER DASHBOARD
+// =============================================================
 
 @Composable
 fun SupplierDashboardScreen(
@@ -45,11 +79,447 @@ fun SupplierDashboardScreen(
     onOpenAnalytics: () -> Unit
 ) {
 
+    // =========================================================
+    // FIREBASE
+    // =========================================================
+
+    val firestore = remember {
+        FirebaseFirestore.getInstance()
+    }
+
+    val supplierId = remember {
+        FirebaseAuth.getInstance().currentUser?.uid
+    }
+
+    // =========================================================
+    // DASHBOARD STATE
+    // =========================================================
+
+    var dashboardStats by remember {
+        mutableStateOf(
+            SupplierDashboardStats()
+        )
+    }
+
+    // =========================================================
+    // FIRESTORE LISTENERS
+    // =========================================================
+
+    DisposableEffect(supplierId) {
+
+        if (supplierId == null) {
+
+            onDispose { }
+
+        } else {
+
+            // =====================================================
+            // PRODUCTS LISTENER
+            // =====================================================
+
+            val productsListener =
+                firestore
+                    .collection("products")
+                    .whereEqualTo(
+                        "supplierId",
+                        supplierId
+                    )
+                    .addSnapshotListener { snapshot, error ->
+
+                        if (
+                            error != null ||
+                            snapshot == null
+                        ) {
+                            return@addSnapshotListener
+                        }
+
+                        dashboardStats =
+                            dashboardStats.copy(
+                                productCount =
+                                    snapshot.documents.size
+                            )
+                    }
+
+            // =====================================================
+            // ORDERS LISTENER
+            // =====================================================
+
+            val ordersListener =
+                firestore
+                    .collection("orders")
+                    .whereEqualTo(
+                        "supplierId",
+                        supplierId
+                    )
+                    .addSnapshotListener { snapshot, error ->
+
+                        if (
+                            error != null ||
+                            snapshot == null
+                        ) {
+                            return@addSnapshotListener
+                        }
+
+                        // =================================================
+                        // COUNTERS
+                        // =================================================
+
+                        var pendingOrders = 0
+
+                        var deliveries = 0
+
+                        var revenue = 0.0
+
+                        // =================================================
+                        // LAST SIX MONTHS
+                        // =================================================
+
+                        val monthlyRevenueMap =
+                            linkedMapOf<String, Double>()
+
+                        val monthKeys =
+                            mutableListOf<String>()
+
+                        val monthLabels =
+                            mutableListOf<String>()
+
+                        val calendar =
+                            Calendar.getInstance()
+
+                        // Start five months before current month.
+                        // This gives us six months including current month.
+
+                        calendar.add(
+                            Calendar.MONTH,
+                            -5
+                        )
+
+                        repeat(6) {
+
+                            val year =
+                                calendar.get(
+                                    Calendar.YEAR
+                                )
+
+                            val month =
+                                calendar.get(
+                                    Calendar.MONTH
+                                ) + 1
+
+                            val key =
+                                String.format(
+                                    Locale.getDefault(),
+                                    "%04d-%02d",
+                                    year,
+                                    month
+                                )
+
+                            val label =
+                                SimpleDateFormat(
+                                    "MMM",
+                                    Locale.getDefault()
+                                ).format(
+                                    calendar.time
+                                )
+
+                            monthKeys.add(
+                                key
+                            )
+
+                            monthLabels.add(
+                                label
+                            )
+
+                            monthlyRevenueMap[key] =
+                                0.0
+
+                            calendar.add(
+                                Calendar.MONTH,
+                                1
+                            )
+                        }
+
+                        // =================================================
+                        // PROCESS EVERY SUPPLIER ORDER
+                        // =================================================
+
+                        snapshot.documents.forEach { document ->
+
+                            // ---------------------------------------------
+                            // ORDER STATUS
+                            // ---------------------------------------------
+
+                            val status =
+                                document
+                                    .getString("status")
+                                    ?.uppercase()
+                                    ?: ""
+
+                            // ---------------------------------------------
+                            // PAYMENT STATUS
+                            // ---------------------------------------------
+
+                            val paymentStatus =
+                                document
+                                    .getString("paymentStatus")
+                                    ?.uppercase()
+                                    ?: "PENDING"
+
+                            // =================================================
+                            // PENDING ORDERS
+                            //
+                            // PLACED and PROCESSING are still pending
+                            // from the supplier's perspective.
+                            // =================================================
+
+                            if (
+                                status == "PLACED" ||
+                                status == "PROCESSING"
+                            ) {
+                                pendingOrders++
+                            }
+
+                            // =================================================
+                            // DELIVERIES
+                            //
+                            // Once dispatched, the order becomes a delivery.
+                            // Delivered orders remain part of delivery history.
+                            // =================================================
+
+                            if (
+                                status == "DISPATCHED" ||
+                                status == "DELIVERED"
+                            ) {
+                                deliveries++
+                            }
+
+                            // =================================================
+                            // REVENUE
+                            //
+                            // IMPORTANT:
+                            // Revenue is counted ONLY after payment is received.
+                            //
+                            // PENDING payment  -> NOT revenue
+                            // PAID payment     -> revenue
+                            // COMPLETED        -> revenue
+                            // RECEIVED         -> revenue
+                            // CANCELLED order  -> NOT revenue
+                            // =================================================
+
+                            val paymentReceived =
+                                paymentStatus == "PAID" ||
+                                        paymentStatus == "COMPLETED" ||
+                                        paymentStatus == "RECEIVED"
+
+                            if (
+                                status != "CANCELLED" &&
+                                paymentReceived
+                            ) {
+
+                                val orderTotal =
+                                    document
+                                        .getDouble(
+                                            "totalAmount"
+                                        )
+                                        ?: 0.0
+
+                                revenue +=
+                                    orderTotal
+
+                                // =============================================
+                                // MONTHLY REVENUE
+                                //
+                                // Only paid/received orders are included.
+                                // =============================================
+
+                                val createdAt =
+                                    document
+                                        .getTimestamp(
+                                            "createdAt"
+                                        )
+
+                                if (
+                                    createdAt != null
+                                ) {
+
+                                    val orderCalendar =
+                                        Calendar.getInstance()
+
+                                    orderCalendar.time =
+                                        createdAt.toDate()
+
+                                    val orderYear =
+                                        orderCalendar.get(
+                                            Calendar.YEAR
+                                        )
+
+                                    val orderMonth =
+                                        orderCalendar.get(
+                                            Calendar.MONTH
+                                        ) + 1
+
+                                    val orderMonthKey =
+                                        String.format(
+                                            Locale.getDefault(),
+                                            "%04d-%02d",
+                                            orderYear,
+                                            orderMonth
+                                        )
+
+                                    if (
+                                        monthlyRevenueMap.containsKey(
+                                            orderMonthKey
+                                        )
+                                    ) {
+
+                                        monthlyRevenueMap[
+                                            orderMonthKey
+                                        ] =
+                                            (
+                                                    monthlyRevenueMap[
+                                                        orderMonthKey
+                                                    ] ?: 0.0
+                                                    ) + orderTotal
+                                    }
+                                }
+                            }
+                        }
+
+                        // =================================================
+                        // BUILD MONTHLY REVENUE LIST
+                        // =================================================
+
+                        val monthlyRevenue =
+                            monthKeys.mapIndexed {
+                                    index,
+                                    key ->
+
+                                MonthlyRevenue(
+                                    month =
+                                        monthLabels[index],
+                                    amount =
+                                        monthlyRevenueMap[
+                                            key
+                                        ] ?: 0.0
+                                )
+                            }
+
+                        // =================================================
+                        // UPDATE ONLY ORDER DATA
+                        //
+                        // Product count is preserved.
+                        // =================================================
+
+                        dashboardStats =
+                            dashboardStats.copy(
+                                pendingOrders =
+                                    pendingOrders,
+
+                                deliveries =
+                                    deliveries,
+
+                                revenue =
+                                    revenue,
+
+                                monthlyRevenue =
+                                    monthlyRevenue
+                            )
+                    }
+
+            // =====================================================
+            // REMOVE LISTENERS
+            // =====================================================
+
+            onDispose {
+
+                productsListener.remove()
+
+                ordersListener.remove()
+            }
+        }
+    }
+
+    // =============================================================
+    // FORMAT REVENUE
+    // =============================================================
+
+    val formattedRevenue =
+        formatRevenue(
+            dashboardStats.revenue
+        )
+
+    // =============================================================
+    // ANALYTICS DATA
+    // =============================================================
+
+    val monthlyRevenue =
+        if (
+            dashboardStats.monthlyRevenue.isEmpty()
+        ) {
+
+            listOf(
+                MonthlyRevenue(
+                    month = "Jan",
+                    amount = 0.0
+                ),
+
+                MonthlyRevenue(
+                    month = "Feb",
+                    amount = 0.0
+                ),
+
+                MonthlyRevenue(
+                    month = "Mar",
+                    amount = 0.0
+                ),
+
+                MonthlyRevenue(
+                    month = "Apr",
+                    amount = 0.0
+                ),
+
+                MonthlyRevenue(
+                    month = "May",
+                    amount = 0.0
+                ),
+
+                MonthlyRevenue(
+                    month = "Jun",
+                    amount = 0.0
+                )
+            )
+
+        } else {
+
+            dashboardStats.monthlyRevenue
+        }
+
+    // =============================================================
+    // FIND HIGHEST MONTHLY REVENUE
+    // =============================================================
+
+    val maximumMonthlyRevenue =
+        monthlyRevenue
+            .maxOfOrNull {
+                it.amount
+            }
+            ?.takeIf {
+                it > 0.0
+            }
+            ?: 1.0
+
+    // =============================================================
+    // MAIN UI
+    // =============================================================
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(FieldCream)
-            .padding(horizontal = 20.dp, vertical = 18.dp)
+            .padding(
+                horizontal = 20.dp,
+                vertical = 18.dp
+            )
     ) {
 
         // ---------------------------------------------------------
@@ -78,7 +548,10 @@ fun SupplierDashboardScreen(
                 )
             }
 
+            // -----------------------------------------------------
             // PROFILE BUTTON
+            // -----------------------------------------------------
+
             OutlinedButton(
                 onClick = {
                     onOpenProfile()
@@ -87,6 +560,7 @@ fun SupplierDashboardScreen(
                 contentPadding = PaddingValues(0.dp),
                 shape = RoundedCornerShape(14.dp)
             ) {
+
                 Text(
                     text = "👤",
                     fontSize = 18.sp
@@ -94,11 +568,9 @@ fun SupplierDashboardScreen(
             }
         }
 
-
         Spacer(
             modifier = Modifier.height(22.dp)
         )
-
 
         // ---------------------------------------------------------
         // WELCOME CARD
@@ -137,7 +609,10 @@ fun SupplierDashboardScreen(
                     modifier = Modifier.height(16.dp)
                 )
 
+                // -------------------------------------------------
                 // MANAGE PRODUCTS BUTTON
+                // -------------------------------------------------
+
                 Button(
                     onClick = {
                         onOpenProducts()
@@ -148,6 +623,7 @@ fun SupplierDashboardScreen(
                     ),
                     shape = RoundedCornerShape(12.dp)
                 ) {
+
                     Text(
                         text = "Manage Products",
                         fontWeight = FontWeight.Bold
@@ -156,11 +632,9 @@ fun SupplierDashboardScreen(
             }
         }
 
-
         Spacer(
             modifier = Modifier.height(20.dp)
         )
-
 
         // ---------------------------------------------------------
         // BUSINESS OVERVIEW
@@ -176,6 +650,9 @@ fun SupplierDashboardScreen(
             modifier = Modifier.height(12.dp)
         )
 
+        // ---------------------------------------------------------
+        // FIRST ROW
+        // ---------------------------------------------------------
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -185,23 +662,29 @@ fun SupplierDashboardScreen(
             SupplierSummaryCard(
                 modifier = Modifier.weight(1f),
                 icon = "📦",
-                value = "124",
+                value =
+                    dashboardStats.productCount
+                        .toString(),
                 label = "Products"
             )
 
             SupplierSummaryCard(
                 modifier = Modifier.weight(1f),
                 icon = "📋",
-                value = "8",
+                value =
+                    dashboardStats.pendingOrders
+                        .toString(),
                 label = "Pending Orders"
             )
         }
-
 
         Spacer(
             modifier = Modifier.height(12.dp)
         )
 
+        // ---------------------------------------------------------
+        // SECOND ROW
+        // ---------------------------------------------------------
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -211,23 +694,24 @@ fun SupplierDashboardScreen(
             SupplierSummaryCard(
                 modifier = Modifier.weight(1f),
                 icon = "🚚",
-                value = "5",
+                value =
+                    dashboardStats.deliveries
+                        .toString(),
                 label = "Deliveries"
             )
 
             SupplierSummaryCard(
                 modifier = Modifier.weight(1f),
                 icon = "₹",
-                value = "48.5K",
+                value =
+                    formattedRevenue,
                 label = "Revenue"
             )
         }
 
-
         Spacer(
             modifier = Modifier.height(24.dp)
         )
-
 
         // ---------------------------------------------------------
         // ANALYTICS
@@ -242,7 +726,6 @@ fun SupplierDashboardScreen(
         Spacer(
             modifier = Modifier.height(12.dp)
         )
-
 
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -270,72 +753,75 @@ fun SupplierDashboardScreen(
                     modifier = Modifier.height(16.dp)
                 )
 
-                // Simple visual sales bars
-                AnalyticsBar(
-                    month = "Jan",
-                    value = "₹32K",
-                    progress = 0.55f
-                )
+                // -------------------------------------------------
+                // DYNAMIC SIX MONTH SALES
+                // -------------------------------------------------
 
-                Spacer(
-                    modifier = Modifier.height(10.dp)
-                )
+                monthlyRevenue.forEachIndexed {
+                        index,
+                        monthData ->
 
-                AnalyticsBar(
-                    month = "Feb",
-                    value = "₹38K",
-                    progress = 0.65f
-                )
+                    val progress =
+                        if (
+                            monthData.amount <= 0.0
+                        ) {
 
-                Spacer(
-                    modifier = Modifier.height(10.dp)
-                )
+                            0f
 
-                AnalyticsBar(
-                    month = "Mar",
-                    value = "₹41K",
-                    progress = 0.72f
-                )
+                        } else {
 
-                Spacer(
-                    modifier = Modifier.height(10.dp)
-                )
+                            (
+                                    monthData.amount /
+                                            maximumMonthlyRevenue
+                                    )
+                                .toFloat()
+                                .coerceIn(
+                                    0f,
+                                    1f
+                                )
+                        }
 
-                AnalyticsBar(
-                    month = "Apr",
-                    value = "₹45K",
-                    progress = 0.80f
-                )
+                    AnalyticsBar(
+                        month =
+                            monthData.month,
 
-                Spacer(
-                    modifier = Modifier.height(10.dp)
-                )
+                        value =
+                            formatRevenue(
+                                monthData.amount
+                            ),
 
-                AnalyticsBar(
-                    month = "May",
-                    value = "₹43K",
-                    progress = 0.76f
-                )
+                        progress =
+                            progress
+                    )
 
-                Spacer(
-                    modifier = Modifier.height(10.dp)
-                )
+                    if (
+                        index <
+                        monthlyRevenue.lastIndex
+                    ) {
 
-                AnalyticsBar(
-                    month = "Jun",
-                    value = "₹48.5K",
-                    progress = 0.90f
-                )
+                        Spacer(
+                            modifier =
+                                Modifier.height(
+                                    10.dp
+                                )
+                        )
+                    }
+                }
 
                 Spacer(
                     modifier = Modifier.height(14.dp)
                 )
+
+                // -------------------------------------------------
+                // FULL ANALYTICS BUTTON
+                // -------------------------------------------------
 
                 TextButton(
                     onClick = {
                         onOpenAnalytics()
                     }
                 ) {
+
                     Text(
                         text = "View Full Analytics →",
                         color = LeafGreen,
@@ -345,17 +831,15 @@ fun SupplierDashboardScreen(
             }
         }
 
-
         Spacer(
             modifier = Modifier.height(20.dp)
         )
     }
 }
 
-
-// -------------------------------------------------------------
+// =============================================================
 // SUMMARY CARD
-// -------------------------------------------------------------
+// =============================================================
 
 @Composable
 private fun SupplierSummaryCard(
@@ -405,10 +889,9 @@ private fun SupplierSummaryCard(
     }
 }
 
-
-// -------------------------------------------------------------
+// =============================================================
 // ANALYTICS BAR
-// -------------------------------------------------------------
+// =============================================================
 
 @Composable
 private fun AnalyticsBar(
@@ -424,7 +907,10 @@ private fun AnalyticsBar(
 
         Text(
             text = month,
-            modifier = Modifier.size(width = 35.dp, height = 30.dp),
+            modifier = Modifier.size(
+                width = 35.dp,
+                height = 30.dp
+            ),
             fontWeight = FontWeight.SemiBold
         )
 
@@ -455,7 +941,10 @@ private fun AnalyticsBar(
 
         Text(
             text = value,
-            modifier = Modifier.size(width = 55.dp, height = 30.dp),
+            modifier = Modifier.size(
+                width = 55.dp,
+                height = 30.dp
+            ),
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
             color = LeafGreen
@@ -463,17 +952,15 @@ private fun AnalyticsBar(
     }
 }
 
-
-// -------------------------------------------------------------
+// =============================================================
 // SUPPLIER BOTTOM BAR
-// -------------------------------------------------------------
+// =============================================================
 
 @Composable
 fun SupplierBottomBar(
     onHome: () -> Unit,
     onProducts: () -> Unit,
     onOrders: () -> Unit,
-    onDelivery: () -> Unit,
     onPayments: () -> Unit
 ) {
 
@@ -508,12 +995,6 @@ fun SupplierBottomBar(
         )
 
         SupplierBottomItem(
-            icon = "🚚",
-            label = "Delivery",
-            onClick = onDelivery
-        )
-
-        SupplierBottomItem(
             icon = "₹",
             label = "Payments",
             onClick = onPayments
@@ -521,10 +1002,9 @@ fun SupplierBottomBar(
     }
 }
 
-
-// -------------------------------------------------------------
+// =============================================================
 // BOTTOM BAR ITEM
-// -------------------------------------------------------------
+// =============================================================
 
 @Composable
 private fun SupplierBottomItem(
@@ -551,6 +1031,54 @@ private fun SupplierBottomItem(
                 fontSize = 11.sp,
                 color = LeafGreen,
                 fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+
+// =============================================================
+// FORMAT REVENUE
+// =============================================================
+
+private fun formatRevenue(
+    amount: Double
+): String {
+
+    return when {
+
+        amount >= 1_000_000 -> {
+
+            String.format(
+                Locale.getDefault(),
+                "₹%.1fM",
+                amount / 1_000_000.0
+            )
+        }
+
+        amount >= 100_000 -> {
+
+            String.format(
+                Locale.getDefault(),
+                "₹%.1fL",
+                amount / 100_000.0
+            )
+        }
+
+        amount >= 1_000 -> {
+
+            String.format(
+                Locale.getDefault(),
+                "₹%.1fK",
+                amount / 1_000.0
+            )
+        }
+
+        else -> {
+
+            String.format(
+                Locale.getDefault(),
+                "₹%.0f",
+                amount
             )
         }
     }

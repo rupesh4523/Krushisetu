@@ -1,18 +1,45 @@
 package com.sashya.krushisetu.ui.navigation
 
-enum class AppDestination(val label: String, val emoji: String) {
+import androidx.annotation.StringRes
+import com.sashya.krushisetu.R
 
-    HOME("Home", "⌂"),
+enum class AppDestination(
+    @StringRes val labelRes: Int,
+    val emoji: String
+) {
 
-    CROPS("My Crops", "🌱"),
+    HOME(
+        R.string.nav_home,
+        "⌂"
+    ),
 
-    ADVISORY("Advisory", "✦"),
+    CROPS(
+        R.string.nav_my_crops,
+        "🌱"
+    ),
 
-    PLANT_SCAN("Plant scan", "📷"),
+    ADVISORY(
+        R.string.nav_advisory,
+        "✦"
+    ),
 
-    SHOP("Shop", "🛒"),
+    PLANT_SCAN(
+        R.string.nav_plant_scan,
+        "📷"
+    ),
 
-    CONSULTATION("Experts", "◉"),
+    CONSULTATION(
+        R.string.nav_experts,
+        "◉"
+    ),
 
-    PROFILE("Profile", "☺")
+    SHOP(
+        R.string.nav_shop,
+        "🛒"
+    ),
+
+    PROFILE(
+        R.string.nav_profile,
+        "☺"
+    )
 }

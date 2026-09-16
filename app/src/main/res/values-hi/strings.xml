@@ -1,0 +1,14 @@
+<resources>
+
+    <string name="app_name">कृषिसेतु</string>
+
+    <!-- Farmer bottom navigation -->
+    <string name="nav_home">होम</string>
+    <string name="nav_my_crops">मेरी फसलें</string>
+    <string name="nav_advisory">सलाह</string>
+    <string name="nav_plant_scan">पौधे की जाँच</string>
+    <string name="nav_shop">बाज़ार</string>
+    <string name="nav_experts">विशेषज्ञ</string>
+    <string name="nav_profile">प्रोफ़ाइल</string>
+
+</resources>

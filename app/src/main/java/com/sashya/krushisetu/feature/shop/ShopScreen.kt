@@ -1,27 +1,33 @@
 package com.sashya.krushisetu.feature.shop
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,13 +36,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
+import com.sashya.krushisetu.data.local.LanguageManager
 import com.sashya.krushisetu.ui.theme.FieldCream
 import com.sashya.krushisetu.ui.theme.LeafGreen
-import com.sashya.krushisetu.ui.theme.MutedText
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import androidx.compose.foundation.layout.statusBarsPadding
 
 private data class ShopSupplier(
     val uid: String,
@@ -62,11 +75,27 @@ private data class CartItem(
     val quantity: Long
 )
 
+private data class FarmerOrder(
+    val orderId: String,
+    val supplierId: String,
+    val items: List<OrderHistoryItem>,
+    val totalAmount: Double,
+    val status: String,
+    val deliveryAddress: String,
+    val paymentStatus: String,
+    val createdAtMillis: Long
+)
+
+private data class OrderHistoryItem(
+    val productName: String,
+    val quantity: Int,
+    val price: Double
+)
+
 @Composable
 fun ShopScreen(
     modifier: Modifier = Modifier
 ) {
-
     val firestore = remember {
         FirebaseFirestore.getInstance()
     }
@@ -76,6 +105,8 @@ fun ShopScreen(
             .currentUser
             ?.uid
     }
+
+    val isHindi = LanguageManager.isHindi()
 
     var suppliers by remember {
         mutableStateOf<List<ShopSupplier>>(emptyList())
@@ -106,7 +137,7 @@ fun ShopScreen(
     }
 
     var isLoadingCart by remember {
-        mutableStateOf(true)
+        mutableStateOf(false)
     }
 
     var addingProductId by remember {
@@ -121,94 +152,240 @@ fun ShopScreen(
         mutableStateOf<String?>(null)
     }
 
+    var isPlacingOrder by remember {
+        mutableStateOf(false)
+    }
+
+    var orderSuccessMessage by remember {
+        mutableStateOf<String?>(null)
+    }
+
+    var farmerOrders by remember {
+        mutableStateOf<List<FarmerOrder>>(emptyList())
+    }
+
+    var isLoadingOrderHistory by remember {
+        mutableStateOf(false)
+    }
+
+    var orderHistoryError by remember {
+        mutableStateOf<String?>(null)
+    }
+
+    val cartQuantity =
+        cartItems.sumOf {
+            it.quantity
+        }
+
     // =============================================================
-    // LOAD ALL SUPPLIERS
+    // ORDER HISTORY LISTENER
     // =============================================================
 
-    DisposableEffect(Unit) {
+    DisposableEffect(farmerId) {
 
-        val listener = firestore
-            .collection("users")
-            .whereEqualTo("role", "SUPPLIER")
-            .addSnapshotListener { snapshot, error ->
+        if (farmerId == null) {
 
-                if (error != null) {
-                    isLoadingSuppliers = false
-                    errorMessage =
-                        error.localizedMessage
-                            ?: "Unable to load suppliers."
-                    return@addSnapshotListener
-                }
+            farmerOrders = emptyList()
 
-                suppliers =
-                    snapshot?.documents
-                        ?.mapNotNull { document ->
+            onDispose { }
 
-                            val uid = document.id
+        } else {
 
-                            val name =
-                                document.getString("name")
-                                    ?.trim()
-                                    .orEmpty()
+            isLoadingOrderHistory = true
 
-                            val companyName =
-                                document.getString("companyName")
-                                    ?.trim()
-                                    .orEmpty()
+            val registration =
+                firestore
+                    .collection("orders")
+                    .whereEqualTo(
+                        "farmerId",
+                        farmerId
+                    )
+                    .addSnapshotListener { snapshot, error ->
 
-                            val businessType =
-                                document.getString("businessType")
-                                    ?.trim()
-                                    .orEmpty()
+                        isLoadingOrderHistory = false
 
-                            val location =
-                                document.getString("branchLocations")
-                                    ?.trim()
-                                    .takeUnless {
-                                        it.isNullOrBlank()
+                        if (error != null) {
+
+                            orderHistoryError =
+                                error.localizedMessage
+                                    ?: if (isHindi) {
+                                        "ऑर्डर इतिहास लोड नहीं हो सका।"
+                                    } else {
+                                        "Unable to load order history."
                                     }
-                                    ?: document.getString("location")
-                                        ?.trim()
-                                        .orEmpty()
 
-                            val displayName =
-                                name
-                                    .takeIf {
-                                        it.isNotBlank()
-                                    }
-                                    ?: companyName
-                                        .takeIf {
-                                            it.isNotBlank()
-                                        }
-                                    ?: "Supplier"
-
-                            ShopSupplier(
-                                uid = uid,
-                                name = displayName,
-                                businessType =
-                                    businessType
-                                        .ifBlank {
-                                            "Agriculture Supplier"
-                                        },
-                                location = location
-                            )
+                            return@addSnapshotListener
                         }
-                        .orEmpty()
 
-                isLoadingSuppliers = false
-                errorMessage = null
+                        orderHistoryError = null
+
+                        farmerOrders =
+                            snapshot?.documents
+                                .orEmpty()
+                                .map { document ->
+
+                                    val rawItems =
+                                        document.get("items")
+                                                as? List<*>
+                                            ?: emptyList<Any>()
+
+                                    val parsedItems =
+                                        rawItems.mapNotNull { rawItem ->
+
+                                            val item =
+                                                rawItem as? Map<*, *>
+                                                    ?: return@mapNotNull null
+
+                                            val productName =
+                                                item["productName"]
+                                                    ?.toString()
+                                                    ?: return@mapNotNull null
+
+                                            val quantity =
+                                                (item["quantity"] as? Number)
+                                                    ?.toInt()
+                                                    ?: 0
+
+                                            val price =
+                                                (item["price"] as? Number)
+                                                    ?.toDouble()
+                                                    ?: 0.0
+
+                                            OrderHistoryItem(
+                                                productName = productName,
+                                                quantity = quantity,
+                                                price = price
+                                            )
+                                        }
+
+                                    val createdAt =
+                                        document.getTimestamp(
+                                            "createdAt"
+                                        )
+
+                                    FarmerOrder(
+                                        orderId = document.id,
+                                        supplierId =
+                                            document.getString(
+                                                "supplierId"
+                                            ) ?: "",
+                                        items = parsedItems,
+                                        totalAmount =
+                                            document.getDouble(
+                                                "totalAmount"
+                                            ) ?: 0.0,
+                                        status =
+                                            document.getString(
+                                                "status"
+                                            ) ?: "PLACED",
+                                        deliveryAddress =
+                                            document.getString(
+                                                "deliveryAddress"
+                                            ) ?: "",
+                                        paymentStatus =
+                                            document.getString(
+                                                "paymentStatus"
+                                            ) ?: "PENDING",
+                                        createdAtMillis =
+                                            createdAt
+                                                ?.toDate()
+                                                ?.time
+                                                ?: 0L
+                                    )
+                                }
+                                .sortedByDescending {
+                                    it.createdAtMillis
+                                }
+                    }
+
+            onDispose {
+                registration.remove()
             }
-
-        onDispose {
-            listener.remove()
         }
     }
 
     // =============================================================
-    // LOAD SELECTED SUPPLIER'S PRODUCTS
+    // SUPPLIER LISTENER
     // =============================================================
 
-    DisposableEffect(selectedSupplier?.uid) {
+    DisposableEffect(Unit) {
+
+        isLoadingSuppliers = true
+
+        val registration =
+            firestore
+                .collection("users")
+                .whereEqualTo(
+                    "role",
+                    "SUPPLIER"
+                )
+                .addSnapshotListener { snapshot, error ->
+
+                    isLoadingSuppliers = false
+
+                    if (error != null) {
+
+                        errorMessage =
+                            error.localizedMessage
+                                ?: if (isHindi) {
+                                    "सप्लायर लोड नहीं हो सके।"
+                                } else {
+                                    "Unable to load suppliers."
+                                }
+
+                        return@addSnapshotListener
+                    }
+
+                    errorMessage = null
+
+                    suppliers =
+                        snapshot?.documents
+                            .orEmpty()
+                            .map { document ->
+
+                                val name =
+                                    document.getString("name")
+                                        ?: document.getString(
+                                            "companyName"
+                                        )
+                                        ?: "Supplier"
+
+                                val businessType =
+                                    document.getString(
+                                        "businessType"
+                                    )
+                                        ?: "Agriculture Supplier"
+
+                                val location =
+                                    document.getString(
+                                        "branchLocations"
+                                    )
+                                        ?: document.getString(
+                                            "location"
+                                        )
+                                        ?: ""
+
+                                ShopSupplier(
+                                    uid = document.id,
+                                    name = name,
+                                    businessType = businessType,
+                                    location = location
+                                )
+                            }
+                }
+
+        onDispose {
+            registration.remove()
+        }
+    }
+
+    // =============================================================
+    // PRODUCT LISTENER
+    // =============================================================
+
+    LaunchedEffect(
+        selectedSupplier?.uid
+    ) {
 
         val supplierId =
             selectedSupplier?.uid
@@ -218,88 +395,71 @@ fun ShopScreen(
             products = emptyList()
             isLoadingProducts = false
 
-            onDispose { }
+            return@LaunchedEffect
+        }
 
-        } else {
+        isLoadingProducts = true
+        errorMessage = null
 
-            isLoadingProducts = true
+        firestore
+            .collection("products")
+            .whereEqualTo(
+                "supplierId",
+                supplierId
+            )
+            .addSnapshotListener { snapshot, error ->
 
-            val listener = firestore
-                .collection("products")
-                .whereEqualTo(
-                    "supplierId",
-                    supplierId
-                )
-                .addSnapshotListener { snapshot, error ->
+                isLoadingProducts = false
 
-                    if (error != null) {
-                        isLoadingProducts = false
-                        errorMessage =
-                            error.localizedMessage
-                                ?: "Unable to load products."
-                        return@addSnapshotListener
-                    }
+                if (error != null) {
 
-                    products =
-                        snapshot?.documents
-                            ?.mapNotNull { document ->
-
-                                val name =
-                                    document.getString(
-                                        "productName"
-                                    )
-                                        ?: return@mapNotNull null
-
-                                val description =
-                                    document.getString(
-                                        "description"
-                                    )
-                                        .orEmpty()
-
-                                val category =
-                                    document.getString(
-                                        "category"
-                                    )
-                                        ?.ifBlank {
-                                            "Other"
-                                        }
-                                        ?: "Other"
-
-                                val price =
-                                    (document.get("price")
-                                            as? Number)
-                                        ?.toDouble()
-                                        ?: 0.0
-
-                                val stock =
-                                    (document.get("stock")
-                                            as? Number)
-                                        ?.toLong()
-                                        ?: 0L
-
-                                ShopProduct(
-                                    id = document.id,
-                                    name = name,
-                                    description = description,
-                                    category = category,
-                                    price = price,
-                                    stock = stock
-                                )
+                    errorMessage =
+                        error.localizedMessage
+                            ?: if (isHindi) {
+                                "उत्पाद लोड नहीं हो सके।"
+                            } else {
+                                "Unable to load products."
                             }
-                            .orEmpty()
 
-                    isLoadingProducts = false
-                    errorMessage = null
+                    return@addSnapshotListener
                 }
 
-            onDispose {
-                listener.remove()
+                errorMessage = null
+
+                products =
+                    snapshot?.documents
+                        .orEmpty()
+                        .map { document ->
+
+                            ShopProduct(
+                                id = document.id,
+                                name =
+                                    document.getString(
+                                        "productName"
+                                    ) ?: "Product",
+                                description =
+                                    document.getString(
+                                        "description"
+                                    ) ?: "",
+                                category =
+                                    document.getString(
+                                        "category"
+                                    ) ?: "Other",
+                                price =
+                                    document.getDouble(
+                                        "price"
+                                    ) ?: 0.0,
+                                stock =
+                                    document.getLong(
+                                        "stock"
+                                    ) ?: 0L
+                            )
+                        }
             }
-        }
     }
 
     // =============================================================
-    // LOAD FARMER CART
+    // CART LISTENER
     // =============================================================
 
     DisposableEffect(farmerId) {
@@ -315,88 +475,74 @@ fun ShopScreen(
 
             isLoadingCart = true
 
-            val listener = firestore
-                .collection("users")
-                .document(farmerId)
-                .collection("cart")
-                .addSnapshotListener { snapshot, error ->
+            val registration =
+                firestore
+                    .collection("users")
+                    .document(farmerId)
+                    .collection("cart")
+                    .addSnapshotListener { snapshot, error ->
 
-                    if (error != null) {
                         isLoadingCart = false
-                        errorMessage =
-                            error.localizedMessage
-                                ?: "Unable to load cart."
-                        return@addSnapshotListener
+
+                        if (error != null) {
+
+                            errorMessage =
+                                error.localizedMessage
+                                    ?: if (isHindi) {
+                                        "कार्ट लोड नहीं हो सका।"
+                                    } else {
+                                        "Unable to load cart."
+                                    }
+
+                            return@addSnapshotListener
+                        }
+
+                        errorMessage = null
+
+                        cartItems =
+                            snapshot?.documents
+                                .orEmpty()
+                                .mapNotNull { document ->
+
+                                    val quantity =
+                                        document.getLong(
+                                            "quantity"
+                                        ) ?: 0L
+
+                                    if (quantity <= 0L) {
+                                        return@mapNotNull null
+                                    }
+
+                                    CartItem(
+                                        productId =
+                                            document.getString(
+                                                "productId"
+                                            ) ?: document.id,
+                                        supplierId =
+                                            document.getString(
+                                                "supplierId"
+                                            ) ?: "",
+                                        productName =
+                                            document.getString(
+                                                "productName"
+                                            ) ?: "Product",
+                                        price =
+                                            document.getDouble(
+                                                "price"
+                                            ) ?: 0.0,
+                                        quantity = quantity
+                                    )
+                                }
                     }
 
-                    cartItems =
-                        snapshot?.documents
-                            ?.mapNotNull { document ->
-
-                                val productId =
-                                    document.getString(
-                                        "productId"
-                                    )
-                                        ?: document.id
-
-                                val supplierId =
-                                    document.getString(
-                                        "supplierId"
-                                    )
-                                        ?: return@mapNotNull null
-
-                                val productName =
-                                    document.getString(
-                                        "productName"
-                                    )
-                                        ?: "Product"
-
-                                val price =
-                                    (document.get("price")
-                                            as? Number)
-                                        ?.toDouble()
-                                        ?: 0.0
-
-                                val quantity =
-                                    (document.get("quantity")
-                                            as? Number)
-                                        ?.toLong()
-                                        ?: 0L
-
-                                if (quantity <= 0L) {
-                                    return@mapNotNull null
-                                }
-
-                                CartItem(
-                                    productId = productId,
-                                    supplierId = supplierId,
-                                    productName = productName,
-                                    price = price,
-                                    quantity = quantity
-                                )
-                            }
-                            .orEmpty()
-
-                    isLoadingCart = false
-                }
-
             onDispose {
-                listener.remove()
+                registration.remove()
             }
         }
     }
 
     // =============================================================
-    // CART TOTAL QUANTITY
-    // =============================================================
-
-    val cartQuantity =
-        cartItems.sumOf {
-            it.quantity
-        }
-
-    // =============================================================
-    // ADD PRODUCT TO CART
+    // ADD TO CART
     // =============================================================
 
     fun addToCart(
@@ -404,15 +550,32 @@ fun ShopScreen(
         supplierId: String
     ) {
 
-        if (farmerId == null) {
+        val currentFarmerId =
+            FirebaseAuth.getInstance()
+                .currentUser
+                ?.uid
+
+        if (currentFarmerId == null) {
+
             errorMessage =
-                "You must be signed in as a farmer to use the cart."
+                if (isHindi) {
+                    "कार्ट का उपयोग करने के लिए किसान के रूप में साइन इन करें।"
+                } else {
+                    "You must be signed in as a farmer to use the cart."
+                }
+
             return
         }
 
         if (product.stock <= 0L) {
+
             errorMessage =
-                "This product is out of stock."
+                if (isHindi) {
+                    "यह उत्पाद स्टॉक में नहीं है।"
+                } else {
+                    "This product is out of stock."
+                }
+
             return
         }
 
@@ -427,77 +590,97 @@ fun ShopScreen(
         val cartRef =
             firestore
                 .collection("users")
-                .document(farmerId)
+                .document(currentFarmerId)
                 .collection("cart")
                 .document(product.id)
 
-        firestore.runTransaction { transaction ->
+        firestore
+            .runTransaction { transaction ->
 
-            // IMPORTANT:
-            // All reads happen before writes in the transaction.
+                val productSnapshot =
+                    transaction.get(productRef)
 
-            val productSnapshot =
-                transaction.get(productRef)
+                if (!productSnapshot.exists()) {
 
-            val cartSnapshot =
-                transaction.get(cartRef)
+                    throw IllegalStateException(
+                        "PRODUCT_NOT_FOUND"
+                    )
+                }
 
-            if (!productSnapshot.exists()) {
-                throw IllegalStateException(
-                    "This product is no longer available."
+                val currentStock =
+                    productSnapshot.getLong(
+                        "stock"
+                    ) ?: 0L
+
+                if (currentStock <= 0L) {
+
+                    throw IllegalStateException(
+                        "OUT_OF_STOCK"
+                    )
+                }
+
+                val cartSnapshot =
+                    transaction.get(cartRef)
+
+                val currentQuantity =
+                    cartSnapshot.getLong(
+                        "quantity"
+                    ) ?: 0L
+
+                transaction.update(
+                    productRef,
+                    "stock",
+                    currentStock - 1L
                 )
-            }
 
-            val currentStock =
-                (productSnapshot.get("stock")
-                        as? Number)
-                    ?.toLong()
-                    ?: 0L
-
-            if (currentStock <= 0L) {
-                throw IllegalStateException(
-                    "This product is out of stock."
+                transaction.set(
+                    cartRef,
+                    mapOf(
+                        "productId" to product.id,
+                        "supplierId" to supplierId,
+                        "productName" to product.name,
+                        "price" to product.price,
+                        "quantity" to currentQuantity + 1L
+                    ),
+                    SetOptions.merge()
                 )
+
             }
+            .addOnSuccessListener {
 
-            val existingQuantity =
-                (cartSnapshot.get("quantity")
-                        as? Number)
-                    ?.toLong()
-                    ?: 0L
+                addingProductId = null
 
-            // Reduce supplier inventory by exactly one.
-            transaction.update(
-                productRef,
-                "stock",
-                currentStock - 1L
-            )
+            }
+            .addOnFailureListener { exception ->
 
-            // Add one unit to farmer's cart.
-            transaction.set(
-                cartRef,
-                mapOf(
-                    "productId" to product.id,
-                    "supplierId" to supplierId,
-                    "productName" to product.name,
-                    "price" to product.price,
-                    "quantity" to existingQuantity + 1L
-                ),
-                SetOptions.merge()
-            )
+                addingProductId = null
 
-        }.addOnSuccessListener {
+                errorMessage =
+                    when (exception.message) {
 
-            addingProductId = null
+                        "PRODUCT_NOT_FOUND" ->
+                            if (isHindi) {
+                                "यह उत्पाद अब उपलब्ध नहीं है।"
+                            } else {
+                                "This product is no longer available."
+                            }
 
-        }.addOnFailureListener { exception ->
+                        "OUT_OF_STOCK" ->
+                            if (isHindi) {
+                                "यह उत्पाद स्टॉक में नहीं है।"
+                            } else {
+                                "This product is out of stock."
+                            }
 
-            addingProductId = null
-
-            errorMessage =
-                exception.localizedMessage
-                    ?: "Unable to add product to cart."
-        }
+                        else ->
+                            exception.localizedMessage
+                                ?: if (isHindi) {
+                                    "उत्पाद को कार्ट में नहीं जोड़ा जा सका।"
+                                } else {
+                                    "Unable to add product to cart."
+                                }
+                    }
+            }
     }
 
     // =============================================================
@@ -508,9 +691,20 @@ fun ShopScreen(
         item: CartItem
     ) {
 
-        if (farmerId == null) {
+        val currentFarmerId =
+            FirebaseAuth.getInstance()
+                .currentUser
+                ?.uid
+
+        if (currentFarmerId == null) {
+
             errorMessage =
-                "You must be signed in as a farmer."
+                if (isHindi) {
+                    "आपको किसान के रूप में साइन इन करना होगा।"
+                } else {
+                    "You must be signed in as a farmer."
+                }
+
             return
         }
 
@@ -527,82 +721,97 @@ fun ShopScreen(
         val cartRef =
             firestore
                 .collection("users")
-                .document(farmerId)
+                .document(currentFarmerId)
                 .collection("cart")
                 .document(item.productId)
 
-        firestore.runTransaction { transaction ->
+        firestore
+            .runTransaction { transaction ->
 
-            val productSnapshot =
-                transaction.get(productRef)
+                val productSnapshot =
+                    transaction.get(productRef)
 
-            val cartSnapshot =
-                transaction.get(cartRef)
+                val cartSnapshot =
+                    transaction.get(cartRef)
 
-            val currentQuantity =
-                (cartSnapshot.get("quantity")
-                        as? Number)
-                    ?.toLong()
-                    ?: 0L
+                val currentQuantity =
+                    cartSnapshot.getLong(
+                        "quantity"
+                    ) ?: 0L
 
-            if (currentQuantity <= 0L) {
-                transaction.delete(cartRef)
-                return@runTransaction
-            }
+                if (currentQuantity <= 0L) {
 
-            val currentStock =
-                (productSnapshot.get("stock")
-                        as? Number)
-                    ?.toLong()
-                    ?: 0L
+                    transaction.delete(cartRef)
 
-            // Return one unit to supplier inventory.
-            transaction.set(
-                productRef,
-                mapOf(
-                    "stock" to currentStock + 1L
-                ),
-                SetOptions.merge()
-            )
+                    return@runTransaction
+                }
 
-            if (currentQuantity == 1L) {
-
-                transaction.delete(cartRef)
-
-            } else {
+                val currentStock =
+                    productSnapshot.getLong(
+                        "stock"
+                    ) ?: 0L
 
                 transaction.update(
-                    cartRef,
-                    "quantity",
-                    currentQuantity - 1L
+                    productRef,
+                    "stock",
+                    currentStock + 1L
                 )
+
+                if (currentQuantity == 1L) {
+
+                    transaction.delete(cartRef)
+
+                } else {
+
+                    transaction.update(
+                        cartRef,
+                        "quantity",
+                        currentQuantity - 1L
+                    )
+                }
+
             }
+            .addOnSuccessListener {
 
-        }.addOnSuccessListener {
+                updatingCartProductId = null
 
-            updatingCartProductId = null
+            }
+            .addOnFailureListener { exception ->
 
-        }.addOnFailureListener { exception ->
+                updatingCartProductId = null
 
-            updatingCartProductId = null
-
-            errorMessage =
-                exception.localizedMessage
-                    ?: "Unable to update cart."
-        }
+                errorMessage =
+                    exception.localizedMessage
+                        ?: if (isHindi) {
+                            "कार्ट अपडेट नहीं हो सका।"
+                        } else {
+                            "Unable to update cart."
+                        }
+            }
     }
 
     // =============================================================
-    // ADD ONE MORE FROM CART
+    // INCREASE CART QUANTITY
     // =============================================================
 
     fun increaseCartQuantity(
         item: CartItem
     ) {
 
-        if (farmerId == null) {
+        val currentFarmerId =
+            FirebaseAuth.getInstance()
+                .currentUser
+                ?.uid
+
+        if (currentFarmerId == null) {
+
             errorMessage =
-                "You must be signed in as a farmer."
+                if (isHindi) {
+                    "आपको किसान के रूप में साइन इन करना होगा।"
+                } else {
+                    "You must be signed in as a farmer."
+                }
+
             return
         }
 
@@ -619,93 +828,542 @@ fun ShopScreen(
         val cartRef =
             firestore
                 .collection("users")
-                .document(farmerId)
+                .document(currentFarmerId)
                 .collection("cart")
                 .document(item.productId)
 
-        firestore.runTransaction { transaction ->
+        firestore
+            .runTransaction { transaction ->
 
-            val productSnapshot =
-                transaction.get(productRef)
+                val productSnapshot =
+                    transaction.get(productRef)
 
-            val cartSnapshot =
-                transaction.get(cartRef)
+                val cartSnapshot =
+                    transaction.get(cartRef)
 
-            if (!productSnapshot.exists()) {
-                throw IllegalStateException(
-                    "This product is no longer available."
+                if (!productSnapshot.exists()) {
+
+                    throw IllegalStateException(
+                        "PRODUCT_NOT_FOUND"
+                    )
+                }
+
+                val currentStock =
+                    productSnapshot.getLong(
+                        "stock"
+                    ) ?: 0L
+
+                if (currentStock <= 0L) {
+
+                    throw IllegalStateException(
+                        "NO_STOCK"
+                    )
+                }
+
+                val currentQuantity =
+                    cartSnapshot.getLong(
+                        "quantity"
+                    ) ?: 0L
+
+                transaction.update(
+                    productRef,
+                    "stock",
+                    currentStock - 1L
                 )
-            }
 
-            val currentStock =
-                (productSnapshot.get("stock")
-                        as? Number)
-                    ?.toLong()
-                    ?: 0L
-
-            if (currentStock <= 0L) {
-                throw IllegalStateException(
-                    "No more stock is available."
+                transaction.update(
+                    cartRef,
+                    "quantity",
+                    currentQuantity + 1L
                 )
+
             }
+            .addOnSuccessListener {
 
-            val currentQuantity =
-                (cartSnapshot.get("quantity")
-                        as? Number)
-                    ?.toLong()
-                    ?: 0L
+                updatingCartProductId = null
 
-            // Take one more unit from supplier stock.
-            transaction.update(
-                productRef,
-                "stock",
-                currentStock - 1L
-            )
+            }
+            .addOnFailureListener { exception ->
 
-            // Add one more unit to cart.
-            transaction.update(
-                cartRef,
-                "quantity",
-                currentQuantity + 1L
-            )
+                updatingCartProductId = null
 
-        }.addOnSuccessListener {
+                errorMessage =
+                    when (exception.message) {
 
-            updatingCartProductId = null
+                        "PRODUCT_NOT_FOUND" ->
+                            if (isHindi) {
+                                "यह उत्पाद अब उपलब्ध नहीं है।"
+                            } else {
+                                "This product is no longer available."
+                            }
 
-        }.addOnFailureListener { exception ->
+                        "NO_STOCK" ->
+                            if (isHindi) {
+                                "और स्टॉक उपलब्ध नहीं है।"
+                            } else {
+                                "No more stock is available."
+                            }
 
-            updatingCartProductId = null
-
-            errorMessage =
-                exception.localizedMessage
-                    ?: "Unable to increase quantity."
-        }
+                        else ->
+                            exception.localizedMessage
+                                ?: if (isHindi) {
+                                    "मात्रा बढ़ाई नहीं जा सकी।"
+                                } else {
+                                    "Unable to increase quantity."
+                                }
+                    }
+            }
     }
 
     // =============================================================
-    // CART VIEW
+    // PLACE ORDER
+    // =============================================================
+
+    fun placeOrder(
+        deliveryAddress: String
+    ) {
+
+        val currentFarmerId =
+            FirebaseAuth.getInstance()
+                .currentUser
+                ?.uid
+
+        if (currentFarmerId == null) {
+
+            errorMessage =
+                if (isHindi) {
+                    "ऑर्डर देने के लिए किसान के रूप में साइन इन करें।"
+                } else {
+                    "You must be signed in as a farmer to place an order."
+                }
+
+            return
+        }
+
+        if (cartItems.isEmpty()) {
+
+            errorMessage =
+                if (isHindi) {
+                    "आपका कार्ट खाली है।"
+                } else {
+                    "Your cart is empty."
+                }
+
+            return
+        }
+
+        if (deliveryAddress.isBlank()) {
+
+            errorMessage =
+                if (isHindi) {
+                    "कृपया डिलीवरी का पता दर्ज करें।"
+                } else {
+                    "Please enter a delivery address."
+                }
+
+            return
+        }
+
+        if (isPlacingOrder) {
+            return
+        }
+
+        isPlacingOrder = true
+        errorMessage = null
+        orderSuccessMessage = null
+
+        firestore
+            .collection("users")
+            .document(currentFarmerId)
+            .get()
+            .addOnSuccessListener { farmerDocument ->
+
+                val farmerName =
+                    farmerDocument.getString("name")
+                        ?: FirebaseAuth.getInstance()
+                            .currentUser
+                            ?.displayName
+                        ?: "Farmer"
+
+                val ordersBySupplier =
+                    cartItems.groupBy {
+                        it.supplierId
+                    }
+
+                val batch =
+                    firestore.batch()
+
+                ordersBySupplier.forEach {
+                        (supplierId, items) ->
+
+                    val orderRef =
+                        firestore
+                            .collection("orders")
+                            .document()
+
+                    val orderItems =
+                        items.map { item ->
+
+                            mapOf(
+                                "productId" to item.productId,
+                                "productName" to item.productName,
+                                "price" to item.price,
+                                "quantity" to item.quantity
+                            )
+                        }
+
+                    val totalAmount =
+                        items.sumOf {
+                            it.price * it.quantity
+                        }
+
+                    val orderData =
+                        mapOf(
+                            "farmerId" to currentFarmerId,
+                            "farmerName" to farmerName,
+                            "supplierId" to supplierId,
+                            "items" to orderItems,
+                            "totalAmount" to totalAmount,
+                            "deliveryAddress" to deliveryAddress,
+                            "status" to "PLACED",
+                            "paymentStatus" to "PENDING",
+                            "deliveryStatus" to "PENDING",
+                            "createdAt" to FieldValue.serverTimestamp()
+                        )
+
+                    batch.set(
+                        orderRef,
+                        orderData
+                    )
+                }
+
+                cartItems.forEach { item ->
+
+                    val cartRef =
+                        firestore
+                            .collection("users")
+                            .document(currentFarmerId)
+                            .collection("cart")
+                            .document(item.productId)
+
+                    batch.delete(cartRef)
+                }
+
+                batch.commit()
+                    .addOnSuccessListener {
+
+                        isPlacingOrder = false
+
+                        orderSuccessMessage =
+                            if (ordersBySupplier.size == 1) {
+
+                                if (isHindi) {
+                                    "ऑर्डर सफलतापूर्वक दिया गया।"
+                                } else {
+                                    "Order placed successfully."
+                                }
+
+                            } else {
+
+                                if (isHindi) {
+                                    "${ordersBySupplier.size} सप्लायर के साथ ऑर्डर सफलतापूर्वक दिए गए।"
+                                } else {
+                                    "Orders placed successfully with ${ordersBySupplier.size} suppliers."
+                                }
+                            }
+                    }
+                    .addOnFailureListener { exception ->
+
+                        isPlacingOrder = false
+
+                        errorMessage =
+                            exception.localizedMessage
+                                ?: if (isHindi) {
+                                    "ऑर्डर नहीं दिया जा सका।"
+                                } else {
+                                    "Unable to place order."
+                                }
+                    }
+            }
+            .addOnFailureListener { exception ->
+
+                isPlacingOrder = false
+
+                errorMessage =
+                    exception.localizedMessage
+                        ?: if (isHindi) {
+                            "किसान की जानकारी लोड नहीं हो सकी।"
+                        } else {
+                            "Unable to load farmer details."
+                        }
+            }
+    }
+
+    // =============================================================
+    // CART SCREEN
     // =============================================================
 
     if (showCart) {
 
         CartView(
-            modifier = modifier,
             cartItems = cartItems,
-            isLoading = isLoadingCart,
+            isLoadingCart = isLoadingCart,
+            updatingCartProductId =
+                updatingCartProductId,
             errorMessage = errorMessage,
-            updatingProductId = updatingCartProductId,
+            orderSuccessMessage =
+                orderSuccessMessage,
+            farmerOrders = farmerOrders,
+            isLoadingOrderHistory =
+                isLoadingOrderHistory,
+            orderHistoryError =
+                orderHistoryError,
+            isPlacingOrder =
+                isPlacingOrder,
+            isHindi = isHindi,
             onBack = {
                 showCart = false
                 errorMessage = null
+                orderSuccessMessage = null
             },
             onIncrease = {
                 increaseCartQuantity(it)
             },
             onDecrease = {
                 decreaseCartQuantity(it)
+            },
+            onPlaceOrder = {
+                placeOrder(it)
             }
         )
+
+        return
+    }
+
+    // =============================================================
+    // SELECTED SUPPLIER
+    // =============================================================
+
+    if (selectedSupplier != null) {
+
+        val supplier =
+            selectedSupplier!!
+
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .background(FieldCream)
+        ) {
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        horizontal = 16.dp,
+                        vertical = 14.dp
+                    ),
+                verticalAlignment =
+                    Alignment.CenterVertically,
+                horizontalArrangement =
+                    Arrangement.SpaceBetween
+            ) {
+
+                Row(
+                    verticalAlignment =
+                        Alignment.CenterVertically
+                ) {
+
+                    TextButton(
+                        onClick = {
+
+                            selectedSupplier = null
+                            products = emptyList()
+                            errorMessage = null
+                        }
+                    ) {
+
+                        Text(
+                            text = "←",
+                            fontSize = 26.sp
+                        )
+                    }
+
+                    Spacer(
+                        modifier = Modifier.width(4.dp)
+                    )
+
+                    Text(
+                        text = supplier.name,
+                        fontSize = 21.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow =
+                            TextOverflow.Ellipsis
+                    )
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        showCart = true
+                    }
+                ) {
+
+                    Text(
+                        text =
+                            if (isHindi) {
+                                "🛒 कार्ट $cartQuantity"
+                            } else {
+                                "🛒 Cart $cartQuantity"
+                            }
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        horizontal = 20.dp
+                    )
+            ) {
+
+                Text(
+                    text = supplier.businessType,
+                    fontSize = 14.sp,
+                    color = Color.Gray
+                )
+
+                if (supplier.location.isNotBlank()) {
+
+                    Spacer(
+                        modifier = Modifier.height(4.dp)
+                    )
+
+                    Text(
+                        text = supplier.location,
+                        fontSize = 13.sp,
+                        color = Color.Gray
+                    )
+                }
+
+                Spacer(
+                    modifier = Modifier.height(20.dp)
+                )
+
+                Text(
+                    text =
+                        if (isHindi) {
+                            "उत्पाद"
+                        } else {
+                            "Products"
+                        },
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            if (errorMessage != null) {
+
+                Text(
+                    text = errorMessage!!,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    color = Color.Red,
+                    fontSize = 14.sp
+                )
+            }
+
+            when {
+
+                isLoadingProducts -> {
+
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment =
+                            Alignment.Center
+                    ) {
+
+                        CircularProgressIndicator(
+                            color = LeafGreen
+                        )
+
+                        Text(
+                            text =
+                                if (isHindi) {
+                                    "उत्पाद लोड हो रहे हैं..."
+                                } else {
+                                    "Loading products..."
+                                },
+                            modifier = Modifier.padding(
+                                top = 70.dp
+                            ),
+                            color = Color.Gray
+                        )
+                    }
+                }
+
+                products.isEmpty() -> {
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp),
+                        contentAlignment =
+                            Alignment.Center
+                    ) {
+
+                        Text(
+                            text =
+                                if (isHindi) {
+                                    "इस सप्लायर ने अभी तक कोई उत्पाद सूचीबद्ध नहीं किया है।"
+                                } else {
+                                    "This supplier has not listed any products yet."
+                                },
+                            color = Color.Gray,
+                            fontSize = 15.sp
+                        )
+                    }
+                }
+
+                else -> {
+
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding =
+                            PaddingValues(
+                                start = 16.dp,
+                                end = 16.dp,
+                                top = 16.dp,
+                                bottom = 24.dp
+                            ),
+                        verticalArrangement =
+                            Arrangement.spacedBy(12.dp)
+                    ) {
+
+                        items(
+                            items = products,
+                            key = { it.id }
+                        ) { product ->
+
+                            ProductCard(
+                                product = product,
+                                isAdding =
+                                    addingProductId ==
+                                            product.id,
+                                isHindi = isHindi,
+                                onAdd = {
+                                    addToCart(
+                                        product,
+                                        supplier.uid
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
         return
     }
@@ -714,312 +1372,151 @@ fun ShopScreen(
     // SUPPLIER LIST
     // =============================================================
 
-    if (selectedSupplier == null) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(FieldCream)
+    ) {
 
-        Column(
-            modifier = modifier
-                .fillMaxSize()
-                .background(FieldCream)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
                 .padding(
                     horizontal = 20.dp,
-                    vertical = 18.dp
-                )
+                    vertical = 16.dp
+                ),
+            verticalAlignment =
+                Alignment.CenterVertically,
+            horizontalArrangement =
+                Arrangement.SpaceBetween
         ) {
 
-            // -----------------------------------------------------
-            // HEADER
-            // -----------------------------------------------------
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment =
-                    Alignment.CenterVertically,
-                horizontalArrangement =
-                    Arrangement.SpaceBetween
-            ) {
-
-                Text(
-                    text = "Krushi Shop",
-                    style =
-                        MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = LeafGreen
-                )
-
-                TextButton(
-                    onClick = {
-                        showCart = true
-                        errorMessage = null
-                    }
-                ) {
-                    Text(
-                        text =
-                            "🛒 Cart" +
-                                    if (cartQuantity > 0) {
-                                        " $cartQuantity"
-                                    } else {
-                                        ""
-                                    },
-                        color = LeafGreen,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            Spacer(
-                modifier = Modifier.height(6.dp)
-            )
-
             Text(
-                text =
-                    "Choose a supplier to view their products.",
-                style =
-                    MaterialTheme.typography.bodyLarge,
-                color = MutedText
-            )
-
-            Spacer(
-                modifier = Modifier.height(22.dp)
-            )
-
-            if (isLoadingSuppliers) {
-
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment =
-                        Alignment.CenterHorizontally
-                ) {
-
-                    CircularProgressIndicator(
-                        color = LeafGreen
-                    )
-
-                    Spacer(
-                        modifier = Modifier.height(10.dp)
-                    )
-
-                    Text(
-                        text = "Loading suppliers...",
-                        color = MutedText
-                    )
-                }
-
-            } else if (errorMessage != null) {
-
-                Text(
-                    text = errorMessage!!,
-                    color =
-                        MaterialTheme.colorScheme.error
-                )
-
-            } else if (suppliers.isEmpty()) {
-
-                Text(
-                    text = "No suppliers available.",
-                    color = MutedText
-                )
-
-            } else {
-
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement =
-                        Arrangement.spacedBy(14.dp)
-                ) {
-
-                    items(
-                        items = suppliers,
-                        key = {
-                            it.uid
-                        }
-                    ) { supplier ->
-
-                        SupplierCard(
-                            supplier = supplier,
-                            onClick = {
-
-                                selectedSupplier =
-                                    supplier
-
-                                errorMessage = null
-                            }
-                        )
-                    }
-                }
-            }
-        }
-
-    } else {
-
-        // =========================================================
-        // SELECTED SUPPLIER PRODUCTS
-        // =========================================================
-
-        Column(
-            modifier = modifier
-                .fillMaxSize()
-                .background(FieldCream)
-                .padding(
-                    horizontal = 20.dp,
-                    vertical = 18.dp
-                )
-        ) {
-
-            // -----------------------------------------------------
-            // TOP HEADER
-            // -----------------------------------------------------
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment =
-                    Alignment.CenterVertically,
-                horizontalArrangement =
-                    Arrangement.SpaceBetween
-            ) {
-
-                TextButton(
-                    onClick = {
-
-                        selectedSupplier = null
-                        products = emptyList()
-                        errorMessage = null
-                    }
-                ) {
-                    Text(
-                        text = "← Back",
-                        color = LeafGreen,
-                        fontWeight =
-                            FontWeight.SemiBold
-                    )
-                }
-
-                TextButton(
-                    onClick = {
-                        showCart = true
-                        errorMessage = null
-                    }
-                ) {
-                    Text(
-                        text =
-                            "🛒 Cart" +
-                                    if (cartQuantity > 0) {
-                                        " $cartQuantity"
-                                    } else {
-                                        ""
-                                    },
-                        color = LeafGreen,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            Text(
-                text = selectedSupplier!!.name,
-                style =
-                    MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = LeafGreen
-            )
-
-            Text(
-                text = selectedSupplier!!.businessType,
-                style =
-                    MaterialTheme.typography.titleMedium,
-                color = LeafGreen
-            )
-
-            if (selectedSupplier!!.location.isNotBlank()) {
-
-                Spacer(
-                    modifier = Modifier.height(4.dp)
-                )
-
-                Text(
-                    text = selectedSupplier!!.location,
-                    color = MutedText
-                )
-            }
-
-            Spacer(
-                modifier = Modifier.height(22.dp)
-            )
-
-            Text(
-                text = "Products",
-                style =
-                    MaterialTheme.typography.headlineSmall,
+                text = "Krushi Shop",
+                fontSize = 24.sp,
                 fontWeight = FontWeight.Bold
             )
 
-            Spacer(
-                modifier = Modifier.height(12.dp)
+            OutlinedButton(
+                onClick = {
+                    showCart = true
+                }
+            ) {
+
+                Text(
+                    text =
+                        if (isHindi) {
+                            "🛒 कार्ट $cartQuantity"
+                        } else {
+                            "🛒 Cart $cartQuantity"
+                        }
+                )
+            }
+        }
+
+        Text(
+            text =
+                if (isHindi) {
+                    "उत्पाद देखने के लिए एक सप्लायर चुनें।"
+                } else {
+                    "Choose a supplier to view their products."
+                },
+            modifier = Modifier.padding(
+                horizontal = 20.dp
+            ),
+            color = Color.Gray,
+            fontSize = 14.sp
+        )
+
+        if (errorMessage != null) {
+
+            Text(
+                text = errorMessage!!,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                color = Color.Red,
+                fontSize = 14.sp
             )
+        }
 
-            if (isLoadingProducts) {
+        when {
 
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment =
-                        Alignment.CenterHorizontally
+            isLoadingSuppliers -> {
+
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment =
+                        Alignment.Center
                 ) {
 
                     CircularProgressIndicator(
                         color = LeafGreen
                     )
 
-                    Spacer(
-                        modifier = Modifier.height(10.dp)
-                    )
-
                     Text(
-                        text = "Loading products...",
-                        color = MutedText
+                        text =
+                            if (isHindi) {
+                                "सप्लायर लोड हो रहे हैं..."
+                            } else {
+                                "Loading suppliers..."
+                            },
+                        modifier = Modifier.padding(
+                            top = 70.dp
+                        ),
+                        color = Color.Gray
                     )
                 }
+            }
 
-            } else if (errorMessage != null) {
+            suppliers.isEmpty() -> {
 
-                Text(
-                    text = errorMessage!!,
-                    color =
-                        MaterialTheme.colorScheme.error
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    contentAlignment =
+                        Alignment.Center
+                ) {
 
-            } else if (products.isEmpty()) {
+                    Text(
+                        text =
+                            if (isHindi) {
+                                "कोई सप्लायर उपलब्ध नहीं है।"
+                            } else {
+                                "No suppliers available."
+                            },
+                        color = Color.Gray
+                    )
+                }
+            }
 
-                Text(
-                    text =
-                        "This supplier has not listed any products yet.",
-                    color = MutedText
-                )
-
-            } else {
+            else -> {
 
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
+                    contentPadding =
+                        PaddingValues(
+                            start = 16.dp,
+                            end = 16.dp,
+                            top = 20.dp,
+                            bottom = 24.dp
+                        ),
                     verticalArrangement =
                         Arrangement.spacedBy(12.dp)
                 ) {
 
                     items(
-                        items = products,
-                        key = {
-                            it.id
-                        }
-                    ) { product ->
+                        items = suppliers,
+                        key = { it.uid }
+                    ) { supplier ->
 
-                        ProductCard(
-                            product = product,
-                            isAdding =
-                                addingProductId ==
-                                        product.id,
-                            onAdd = {
-
-                                addToCart(
-                                    product = product,
-                                    supplierId =
-                                        selectedSupplier!!.uid
-                                )
+                        SupplierCard(
+                            supplier = supplier,
+                            isHindi = isHindi,
+                            onClick = {
+                                selectedSupplier = supplier
+                                errorMessage = null
                             }
                         )
                     }
@@ -1029,42 +1526,34 @@ fun ShopScreen(
     }
 }
 
-// ================================================================
+// =============================================================
 // SUPPLIER CARD
-// ================================================================
+// =============================================================
 
 @Composable
 private fun SupplierCard(
     supplier: ShopSupplier,
+    isHindi: Boolean,
     onClick: () -> Unit
 ) {
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(
-                onClick = onClick
-            ),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color.White
         ),
-        elevation =
-            CardDefaults.cardElevation(
-                defaultElevation = 2.dp
-            )
+        onClick = onClick
     ) {
 
         Column(
-            modifier = Modifier.padding(20.dp)
+            modifier = Modifier.padding(18.dp)
         ) {
 
             Text(
                 text = supplier.name,
-                style =
-                    MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF1D2B20)
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
             )
 
             Spacer(
@@ -1073,22 +1562,20 @@ private fun SupplierCard(
 
             Text(
                 text = supplier.businessType,
-                style =
-                    MaterialTheme.typography.titleMedium,
-                color = LeafGreen,
-                fontWeight =
-                    FontWeight.SemiBold
+                fontSize = 14.sp,
+                color = Color.Gray
             )
 
             if (supplier.location.isNotBlank()) {
 
                 Spacer(
-                    modifier = Modifier.height(6.dp)
+                    modifier = Modifier.height(4.dp)
                 )
 
                 Text(
                     text = supplier.location,
-                    color = MutedText
+                    fontSize = 13.sp,
+                    color = Color.Gray
                 )
             }
 
@@ -1097,35 +1584,1109 @@ private fun SupplierCard(
             )
 
             Text(
-                text = "View products →",
+                text =
+                    if (isHindi) {
+                        "उत्पाद देखें →"
+                    } else {
+                        "View products →"
+                    },
                 color = LeafGreen,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.SemiBold
             )
         }
     }
 }
 
-// ================================================================
+// =============================================================
 // PRODUCT CARD
-// ================================================================
+// =============================================================
 
 @Composable
 private fun ProductCard(
     product: ShopProduct,
     isAdding: Boolean,
+    isHindi: Boolean,
     onAdd: () -> Unit
 ) {
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color.White
-        ),
-        elevation =
-            CardDefaults.cardElevation(
-                defaultElevation = 2.dp
+        )
+    ) {
+
+        Column(
+            modifier = Modifier.padding(18.dp)
+        ) {
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement =
+                    Arrangement.SpaceBetween,
+                verticalAlignment =
+                    Alignment.Top
+            ) {
+
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+
+                    Text(
+                        text = product.name,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(
+                        modifier = Modifier.height(4.dp)
+                    )
+
+                    Text(
+                        text = product.category,
+                        fontSize = 13.sp,
+                        color = LeafGreen,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                Text(
+                    text =
+                        "₹${String.format(Locale.US, "%.2f", product.price)}",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            if (product.description.isNotBlank()) {
+
+                Spacer(
+                    modifier = Modifier.height(10.dp)
+                )
+
+                Text(
+                    text = product.description,
+                    fontSize = 14.sp,
+                    color = Color.DarkGray
+                )
+            }
+
+            Spacer(
+                modifier = Modifier.height(10.dp)
             )
+
+            Text(
+                text =
+                    if (isHindi) {
+                        "उपलब्ध स्टॉक: ${product.stock}"
+                    } else {
+                        "Available stock: ${product.stock}"
+                    },
+                fontSize = 13.sp,
+                color = Color.Gray
+            )
+
+            Spacer(
+                modifier = Modifier.height(14.dp)
+            )
+
+            Button(
+                onClick = onAdd,
+                enabled =
+                    !isAdding &&
+                            product.stock > 0,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+
+                when {
+
+                    isAdding -> {
+
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp
+                        )
+
+                        Spacer(
+                            modifier = Modifier.width(8.dp)
+                        )
+
+                        Text(
+                            text =
+                                if (isHindi) {
+                                    "जोड़ा जा रहा है..."
+                                } else {
+                                    "Adding..."
+                                }
+                        )
+                    }
+
+                    product.stock <= 0 -> {
+
+                        Text(
+                            text =
+                                if (isHindi) {
+                                    "स्टॉक में नहीं है"
+                                } else {
+                                    "Out of stock"
+                                }
+                        )
+                    }
+
+                    else -> {
+
+                        Text(
+                            text =
+                                if (isHindi) {
+                                    "कार्ट में जोड़ें"
+                                } else {
+                                    "Add to cart"
+                                }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// =============================================================
+// CART VIEW
+// =============================================================
+
+@Composable
+private fun CartView(
+    cartItems: List<CartItem>,
+    isLoadingCart: Boolean,
+    updatingCartProductId: String?,
+    errorMessage: String?,
+    orderSuccessMessage: String?,
+    farmerOrders: List<FarmerOrder>,
+    isLoadingOrderHistory: Boolean,
+    orderHistoryError: String?,
+    isPlacingOrder: Boolean,
+    isHindi: Boolean,
+    onBack: () -> Unit,
+    onIncrease: (CartItem) -> Unit,
+    onDecrease: (CartItem) -> Unit,
+    onPlaceOrder: (String) -> Unit
+) {
+
+    var showCheckoutDialog by remember {
+        mutableStateOf(false)
+    }
+
+    var showOrderHistory by remember {
+        mutableStateOf(false)
+    }
+
+    var deliveryAddress by remember {
+        mutableStateOf("")
+    }
+
+    if (showOrderHistory) {
+
+        FarmerOrderHistoryView(
+            orders = farmerOrders,
+            isLoading = isLoadingOrderHistory,
+            errorMessage = orderHistoryError,
+            isHindi = isHindi,
+            onBack = {
+                showOrderHistory = false
+            }
+        )
+
+        return
+    }
+
+    val totalAmount =
+        cartItems.sumOf {
+            it.price * it.quantity
+        }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(FieldCream)
+            .statusBarsPadding()
+    ) {
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    horizontal = 16.dp,
+                    vertical = 14.dp
+                ),
+            verticalAlignment =
+                Alignment.CenterVertically,
+            horizontalArrangement =
+                Arrangement.SpaceBetween
+        ) {
+
+            Row(
+                verticalAlignment =
+                    Alignment.CenterVertically
+            ) {
+
+                TextButton(
+                    onClick = onBack
+                ) {
+
+                    Text(
+                        text = "←",
+                        fontSize = 26.sp
+                    )
+                }
+
+                Text(
+                    text =
+                        if (isHindi) {
+                            "कार्ट"
+                        } else {
+                            "Cart"
+                        },
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            TextButton(
+                onClick = {
+                    showOrderHistory = true
+                }
+            ) {
+
+                Text(
+                    text =
+                        if (isHindi) {
+                            "इतिहास"
+                        } else {
+                            "History"
+                        }
+                )
+            }
+        }
+
+        if (errorMessage != null) {
+
+            Text(
+                text = errorMessage,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        horizontal = 16.dp,
+                        vertical = 6.dp
+                    ),
+                color = Color.Red,
+                fontSize = 14.sp
+            )
+        }
+
+        if (orderSuccessMessage != null) {
+
+            Text(
+                text = orderSuccessMessage,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        horizontal = 16.dp,
+                        vertical = 6.dp
+                    ),
+                color = LeafGreen,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
+        when {
+
+            isLoadingCart -> {
+
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment =
+                        Alignment.Center
+                ) {
+
+                    CircularProgressIndicator(
+                        color = LeafGreen
+                    )
+
+                    Text(
+                        text =
+                            if (isHindi) {
+                                "कार्ट लोड हो रहा है..."
+                            } else {
+                                "Loading cart..."
+                            },
+                        modifier = Modifier.padding(
+                            top = 70.dp
+                        ),
+                        color = Color.Gray
+                    )
+                }
+            }
+
+            cartItems.isEmpty() -> {
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    contentAlignment =
+                        Alignment.Center
+                ) {
+
+                    Column(
+                        horizontalAlignment =
+                            Alignment.CenterHorizontally
+                    ) {
+
+                        Text(
+                            text =
+                                if (isHindi) {
+                                    "आपका कार्ट खाली है।"
+                                } else {
+                                    "Your cart is empty."
+                                },
+                            fontSize = 19.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Spacer(
+                            modifier = Modifier.height(8.dp)
+                        )
+
+                        Text(
+                            text =
+                                if (isHindi) {
+                                    "शुरू करने के लिए किसी सप्लायर से उत्पाद जोड़ें।"
+                                } else {
+                                    "Add products from a supplier to get started."
+                                },
+                            color = Color.Gray,
+                            fontSize = 14.sp
+                        )
+
+                        Spacer(
+                            modifier = Modifier.height(18.dp)
+                        )
+
+                        OutlinedButton(
+                            onClick = {
+                                showOrderHistory = true
+                            }
+                        ) {
+
+                            Text(
+                                text =
+                                    if (isHindi) {
+                                        "ऑर्डर इतिहास देखें"
+                                    } else {
+                                        "View Order History"
+                                    }
+                            )
+                        }
+                    }
+                }
+            }
+
+            else -> {
+
+                Column(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        contentPadding =
+                            PaddingValues(
+                                start = 16.dp,
+                                end = 16.dp,
+                                top = 8.dp,
+                                bottom = 12.dp
+                            ),
+                        verticalArrangement =
+                            Arrangement.spacedBy(10.dp)
+                    ) {
+
+                        items(
+                            items = cartItems,
+                            key = { it.productId }
+                        ) { item ->
+
+                            CartItemCard(
+                                item = item,
+                                isUpdating =
+                                    updatingCartProductId ==
+                                            item.productId,
+                                isHindi = isHindi,
+                                onIncrease = {
+                                    onIncrease(item)
+                                },
+                                onDecrease = {
+                                    onDecrease(item)
+                                }
+                            )
+                        }
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.White)
+                            .padding(16.dp)
+                    ) {
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement =
+                                Arrangement.SpaceBetween
+                        ) {
+
+                            Text(
+                                text =
+                                    if (isHindi) {
+                                        "कुल"
+                                    } else {
+                                        "Total"
+                                    },
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            Text(
+                                text =
+                                    "₹${String.format(Locale.US, "%.2f", totalAmount)}",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Spacer(
+                            modifier = Modifier.height(12.dp)
+                        )
+
+                        Button(
+                            onClick = {
+                                showCheckoutDialog = true
+                            },
+                            enabled = !isPlacingOrder,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+
+                            Text(
+                                text =
+                                    if (isPlacingOrder) {
+
+                                        if (isHindi) {
+                                            "ऑर्डर दिया जा रहा है..."
+                                        } else {
+                                            "Placing order..."
+                                        }
+
+                                    } else {
+
+                                        if (isHindi) {
+                                            "चेकआउट के लिए आगे बढ़ें"
+                                        } else {
+                                            "Proceed to checkout"
+                                        }
+                                    }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showCheckoutDialog) {
+
+        AlertDialog(
+            onDismissRequest = {
+
+                if (!isPlacingOrder) {
+                    showCheckoutDialog = false
+                }
+            },
+            title = {
+
+                Text(
+                    text =
+                        if (isHindi) {
+                            "चेकआउट"
+                        } else {
+                            "Checkout"
+                        }
+                )
+            },
+            text = {
+
+                Column {
+
+                    Text(
+                        text =
+                            if (isHindi) {
+                                "वह पता दर्ज करें जहाँ आप ऑर्डर की डिलीवरी चाहते हैं।"
+                            } else {
+                                "Enter the address where you want the order delivered."
+                            }
+                    )
+
+                    Spacer(
+                        modifier = Modifier.height(12.dp)
+                    )
+
+                    OutlinedTextField(
+                        value = deliveryAddress,
+                        onValueChange = {
+                            deliveryAddress = it
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = {
+
+                            Text(
+                                text =
+                                    if (isHindi) {
+                                        "डिलीवरी का पता"
+                                    } else {
+                                        "Delivery address"
+                                    }
+                            )
+                        },
+                        minLines = 3
+                    )
+                }
+            },
+            confirmButton = {
+
+                TextButton(
+                    onClick = {
+
+                        onPlaceOrder(
+                            deliveryAddress
+                        )
+
+                        showCheckoutDialog = false
+                    },
+                    enabled =
+                        deliveryAddress.isNotBlank() &&
+                                !isPlacingOrder
+                ) {
+
+                    Text(
+                        text =
+                            if (isHindi) {
+                                "ऑर्डर दें"
+                            } else {
+                                "Place order"
+                            }
+                    )
+                }
+            },
+            dismissButton = {
+
+                TextButton(
+                    onClick = {
+                        showCheckoutDialog = false
+                    },
+                    enabled = !isPlacingOrder
+                ) {
+
+                    Text(
+                        text =
+                            if (isHindi) {
+                                "रद्द करें"
+                            } else {
+                                "Cancel"
+                            }
+                    )
+                }
+            }
+        )
+    }
+}
+
+// =============================================================
+// ORDER HISTORY
+// =============================================================
+
+@Composable
+private fun FarmerOrderHistoryView(
+    orders: List<FarmerOrder>,
+    isLoading: Boolean,
+    errorMessage: String?,
+    isHindi: Boolean,
+    onBack: () -> Unit
+) {
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(FieldCream)
+            .statusBarsPadding()
+    ) {
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    horizontal = 16.dp,
+                    vertical = 14.dp
+                ),
+            verticalAlignment =
+                Alignment.CenterVertically
+        ) {
+
+            TextButton(
+                onClick = onBack
+            ) {
+
+                Text(
+                    text = "←",
+                    fontSize = 26.sp
+                )
+            }
+
+            Column {
+
+                Text(
+                    text =
+                        if (isHindi) {
+                            "ऑर्डर इतिहास"
+                        } else {
+                            "Order History"
+                        },
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    text =
+                        if (isHindi) {
+                            "अपने दिए गए और पूरे हुए ऑर्डर ट्रैक करें"
+                        } else {
+                            "Track your placed and completed orders"
+                        },
+                    fontSize = 13.sp,
+                    color = Color.Gray
+                )
+            }
+        }
+
+        when {
+
+            isLoading -> {
+
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment =
+                        Alignment.Center
+                ) {
+
+                    CircularProgressIndicator(
+                        color = LeafGreen
+                    )
+
+                    Text(
+                        text =
+                            if (isHindi) {
+                                "ऑर्डर इतिहास लोड हो रहा है..."
+                            } else {
+                                "Loading order history..."
+                            },
+                        modifier = Modifier.padding(
+                            top = 70.dp
+                        ),
+                        color = Color.Gray
+                    )
+                }
+            }
+
+            errorMessage != null -> {
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    contentAlignment =
+                        Alignment.Center
+                ) {
+
+                    Column(
+                        horizontalAlignment =
+                            Alignment.CenterHorizontally
+                    ) {
+
+                        Text(
+                            text =
+                                if (isHindi) {
+                                    "ऑर्डर इतिहास लोड नहीं हो सका"
+                                } else {
+                                    "Unable to load order history"
+                                },
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 17.sp
+                        )
+
+                        Spacer(
+                            modifier = Modifier.height(8.dp)
+                        )
+
+                        Text(
+                            text = errorMessage,
+                            color = Color.Red,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+            }
+
+            orders.isEmpty() -> {
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    contentAlignment =
+                        Alignment.Center
+                ) {
+
+                    Column(
+                        horizontalAlignment =
+                            Alignment.CenterHorizontally
+                    ) {
+
+                        Text(
+                            text =
+                                if (isHindi) {
+                                    "अभी कोई ऑर्डर नहीं है।"
+                                } else {
+                                    "No orders yet."
+                                },
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Spacer(
+                            modifier = Modifier.height(8.dp)
+                        )
+
+                        Text(
+                            text =
+                                if (isHindi) {
+                                    "चेकआउट के बाद आपके ऑर्डर यहाँ दिखाई देंगे।"
+                                } else {
+                                    "Your orders will appear here after checkout."
+                                },
+                            color = Color.Gray,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+            }
+
+            else -> {
+
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding =
+                        PaddingValues(
+                            start = 16.dp,
+                            end = 16.dp,
+                            top = 8.dp,
+                            bottom = 24.dp
+                        ),
+                    verticalArrangement =
+                        Arrangement.spacedBy(12.dp)
+                ) {
+
+                    items(
+                        items = orders,
+                        key = { it.orderId }
+                    ) { order ->
+
+                        FarmerOrderHistoryCard(
+                            order = order,
+                            isHindi = isHindi
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// =============================================================
+// ORDER HISTORY CARD
+// =============================================================
+
+@Composable
+private fun FarmerOrderHistoryCard(
+    order: FarmerOrder,
+    isHindi: Boolean
+) {
+
+    val displayStatus =
+        when (order.status.uppercase()) {
+
+            "PLACED",
+            "NEW" ->
+                if (isHindi) {
+                    "दिया गया"
+                } else {
+                    "Placed"
+                }
+
+            "PROCESSING" ->
+                if (isHindi) {
+                    "प्रक्रिया में"
+                } else {
+                    "Processing"
+                }
+
+            "DISPATCHED" ->
+                if (isHindi) {
+                    "भेज दिया गया"
+                } else {
+                    "Dispatched"
+                }
+
+            "DELIVERED" ->
+                if (isHindi) {
+                    "पूरा हुआ"
+                } else {
+                    "Completed"
+                }
+
+            else ->
+                order.status
+        }
+
+    val statusMessage =
+        when (order.status.uppercase()) {
+
+            "PLACED",
+            "NEW" ->
+                if (isHindi) {
+                    "ऑर्डर सफलतापूर्वक दिया गया"
+                } else {
+                    "Order placed successfully"
+                }
+
+            "PROCESSING" ->
+                if (isHindi) {
+                    "सप्लायर आपके ऑर्डर को तैयार कर रहा है"
+                } else {
+                    "Supplier is processing your order"
+                }
+
+            "DISPATCHED" ->
+                if (isHindi) {
+                    "आपका ऑर्डर भेज दिया गया है"
+                } else {
+                    "Your order has been dispatched"
+                }
+
+            "DELIVERED" ->
+                if (isHindi) {
+                    "ऑर्डर सफलतापूर्वक डिलीवर हुआ"
+                } else {
+                    "Order delivered successfully"
+                }
+
+            else ->
+                if (isHindi) {
+                    "ऑर्डर की स्थिति अपडेट हुई"
+                } else {
+                    "Order status updated"
+                }
+        }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        )
+    ) {
+
+        Column(
+            modifier = Modifier.padding(18.dp)
+        ) {
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement =
+                    Arrangement.SpaceBetween
+            ) {
+
+                Text(
+                    text =
+                        if (isHindi) {
+                            "ऑर्डर #${order.orderId}"
+                        } else {
+                            "Order #${order.orderId}"
+                        },
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    text = displayStatus,
+                    color = LeafGreen,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            Spacer(
+                modifier = Modifier.height(8.dp)
+            )
+
+            Text(
+                text = statusMessage,
+                fontSize = 14.sp,
+                color = Color.DarkGray
+            )
+
+            if (order.createdAtMillis > 0L) {
+
+                Spacer(
+                    modifier = Modifier.height(6.dp)
+                )
+
+                Text(
+                    text =
+                        formatOrderHistoryDate(
+                            order.createdAtMillis,
+                            isHindi
+                        ),
+                    fontSize = 13.sp,
+                    color = Color.Gray
+                )
+            }
+
+            Spacer(
+                modifier = Modifier.height(12.dp)
+            )
+
+            order.items.forEach { item ->
+
+                Text(
+                    text =
+                        "${item.quantity} × ${item.productName}",
+                    fontSize = 14.sp
+                )
+
+                Spacer(
+                    modifier = Modifier.height(4.dp)
+                )
+            }
+
+            Spacer(
+                modifier = Modifier.height(10.dp)
+            )
+
+            Text(
+                text =
+                    if (isHindi) {
+                        "डिलीवरी का पता"
+                    } else {
+                        "Delivery address"
+                    },
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.Gray
+            )
+
+            Spacer(
+                modifier = Modifier.height(3.dp)
+            )
+
+            Text(
+                text = order.deliveryAddress,
+                fontSize = 14.sp
+            )
+
+            Spacer(
+                modifier = Modifier.height(10.dp)
+            )
+
+            Text(
+                text =
+                    if (isHindi) {
+                        "भुगतान: ${
+                            formatPaymentStatus(
+                                order.paymentStatus,
+                                true
+                            )
+                        }"
+                    } else {
+                        "Payment: ${
+                            formatPaymentStatus(
+                                order.paymentStatus,
+                                false
+                            )
+                        }"
+                    },
+                fontSize = 14.sp
+            )
+
+            Spacer(
+                modifier = Modifier.height(6.dp)
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement =
+                    Arrangement.SpaceBetween
+            ) {
+
+                Text(
+                    text =
+                        if (isHindi) {
+                            "कुल"
+                        } else {
+                            "Total"
+                        },
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    text =
+                        "₹${String.format(Locale.US, "%.2f", order.totalAmount)}",
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+// =============================================================
+// CART ITEM CARD
+// =============================================================
+
+@Composable
+private fun CartItemCard(
+    item: CartItem,
+    isUpdating: Boolean,
+    isHindi: Boolean,
+    onIncrease: () -> Unit,
+    onDecrease: () -> Unit
+) {
+
+    val itemTotal =
+        item.price * item.quantity
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        )
     ) {
 
         Column(
@@ -1145,9 +2706,8 @@ private fun ProductCard(
                 ) {
 
                     Text(
-                        text = product.name,
-                        style =
-                            MaterialTheme.typography.titleMedium,
+                        text = item.productName,
+                        fontSize = 17.sp,
                         fontWeight = FontWeight.Bold
                     )
 
@@ -1156,386 +2716,41 @@ private fun ProductCard(
                     )
 
                     Text(
-                        text = product.category,
-                        color = LeafGreen,
-                        fontWeight =
-                            FontWeight.SemiBold
+                        text =
+                            "₹${
+                                String.format(
+                                    Locale.US,
+                                    "%.2f",
+                                    item.price
+                                )
+                            } ${
+                                if (isHindi) {
+                                    "प्रति यूनिट"
+                                } else {
+                                    "each"
+                                }
+                            }",
+                        fontSize = 13.sp,
+                        color = Color.Gray
                     )
                 }
 
                 Text(
                     text =
-                        "₹${String.format(
-                            "%.2f",
-                            product.price
-                        )}",
+                        "₹${
+                            String.format(
+                                Locale.US,
+                                "%.2f",
+                                itemTotal
+                            )
+                        }",
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
-
-            if (product.description.isNotBlank()) {
-
-                Spacer(
-                    modifier = Modifier.height(8.dp)
-                )
-
-                Text(
-                    text = product.description,
-                    color = MutedText
-                )
-            }
-
-            Spacer(
-                modifier = Modifier.height(8.dp)
-            )
-
-            Text(
-                text =
-                    "Available stock: ${product.stock}",
-                color = MutedText
-            )
 
             Spacer(
                 modifier = Modifier.height(12.dp)
-            )
-
-            Button(
-                onClick = onAdd,
-                enabled =
-                    product.stock > 0L &&
-                            !isAdding,
-                modifier =
-                    Modifier.fillMaxWidth()
-            ) {
-
-                Text(
-                    text =
-                        when {
-                            isAdding ->
-                                "Adding..."
-
-                            product.stock <= 0L ->
-                                "Out of stock"
-
-                            else ->
-                                "Add to cart"
-                        }
-                )
-            }
-        }
-    }
-}
-
-// ================================================================
-// CART VIEW
-// ================================================================
-
-@Composable
-private fun CartView(
-    modifier: Modifier,
-    cartItems: List<CartItem>,
-    isLoading: Boolean,
-    errorMessage: String?,
-    updatingProductId: String?,
-    onBack: () -> Unit,
-    onIncrease: (CartItem) -> Unit,
-    onDecrease: (CartItem) -> Unit
-) {
-
-    val totalAmount =
-        cartItems.sumOf {
-            it.price * it.quantity
-        }
-
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(FieldCream)
-            .padding(
-                horizontal = 20.dp,
-                vertical = 18.dp
-            )
-    ) {
-
-        // ---------------------------------------------------------
-        // HEADER
-        // ---------------------------------------------------------
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment =
-                Alignment.CenterVertically,
-            horizontalArrangement =
-                Arrangement.SpaceBetween
-        ) {
-
-            TextButton(
-                onClick = onBack
-            ) {
-                Text(
-                    text = "← Shop",
-                    color = LeafGreen,
-                    fontWeight =
-                        FontWeight.SemiBold
-                )
-            }
-
-            Text(
-                text = "Cart",
-                style =
-                    MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = LeafGreen
-            )
-        }
-
-        Spacer(
-            modifier = Modifier.height(12.dp)
-        )
-
-        if (errorMessage != null) {
-
-            Text(
-                text = errorMessage,
-                color =
-                    MaterialTheme.colorScheme.error
-            )
-
-            Spacer(
-                modifier = Modifier.height(10.dp)
-            )
-        }
-
-        if (isLoading) {
-
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment =
-                    Alignment.CenterHorizontally
-            ) {
-
-                CircularProgressIndicator(
-                    color = LeafGreen
-                )
-
-                Spacer(
-                    modifier = Modifier.height(10.dp)
-                )
-
-                Text(
-                    text = "Loading cart...",
-                    color = MutedText
-                )
-            }
-
-        } else if (cartItems.isEmpty()) {
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        top = 40.dp
-                    ),
-                horizontalAlignment =
-                    Alignment.CenterHorizontally
-            ) {
-
-                Text(
-                    text = "🛒",
-                    style =
-                        MaterialTheme.typography.displaySmall
-                )
-
-                Spacer(
-                    modifier = Modifier.height(12.dp)
-                )
-
-                Text(
-                    text = "Your cart is empty.",
-                    style =
-                        MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(
-                    modifier = Modifier.height(6.dp)
-                )
-
-                Text(
-                    text =
-                        "Add products from a supplier to get started.",
-                    color = MutedText
-                )
-            }
-
-        } else {
-
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement =
-                    Arrangement.spacedBy(12.dp)
-            ) {
-
-                items(
-                    items = cartItems,
-                    key = {
-                        it.productId
-                    }
-                ) { item ->
-
-                    CartItemCard(
-                        item = item,
-                        isUpdating =
-                            updatingProductId ==
-                                    item.productId,
-                        onIncrease = {
-                            onIncrease(item)
-                        },
-                        onDecrease = {
-                            onDecrease(item)
-                        }
-                    )
-                }
-            }
-
-            Spacer(
-                modifier = Modifier.height(16.dp)
-            )
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape =
-                    RoundedCornerShape(16.dp),
-                colors =
-                    CardDefaults.cardColors(
-                        containerColor = Color.White
-                    )
-            ) {
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(18.dp),
-                    horizontalArrangement =
-                        Arrangement.SpaceBetween,
-                    verticalAlignment =
-                        Alignment.CenterVertically
-                ) {
-
-                    Text(
-                        text = "Total",
-                        style =
-                            MaterialTheme.typography.titleLarge,
-                        fontWeight =
-                            FontWeight.Bold
-                    )
-
-                    Text(
-                        text =
-                            "₹${String.format(
-                                "%.2f",
-                                totalAmount
-                            )}",
-                        style =
-                            MaterialTheme.typography.titleLarge,
-                        fontWeight =
-                            FontWeight.Bold,
-                        color = LeafGreen
-                    )
-                }
-            }
-
-            Spacer(
-                modifier = Modifier.height(10.dp)
-            )
-
-            Text(
-                text =
-                    "Checkout will be added next.",
-                modifier =
-                    Modifier.fillMaxWidth(),
-                color = MutedText
-            )
-        }
-    }
-}
-
-// ================================================================
-// CART ITEM CARD
-// ================================================================
-
-@Composable
-private fun CartItemCard(
-    item: CartItem,
-    isUpdating: Boolean,
-    onIncrease: () -> Unit,
-    onDecrease: () -> Unit
-) {
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        ),
-        elevation =
-            CardDefaults.cardElevation(
-                defaultElevation = 2.dp
-            )
-    ) {
-
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement =
-                    Arrangement.SpaceBetween,
-                verticalAlignment =
-                    Alignment.Top
-            ) {
-
-                Column(
-                    modifier =
-                        Modifier.weight(1f)
-                ) {
-
-                    Text(
-                        text = item.productName,
-                        style =
-                            MaterialTheme.typography.titleMedium,
-                        fontWeight =
-                            FontWeight.Bold
-                    )
-
-                    Spacer(
-                        modifier = Modifier.height(4.dp)
-                    )
-
-                    Text(
-                        text =
-                            "₹${String.format(
-                                "%.2f",
-                                item.price
-                            )} each",
-                        color = MutedText
-                    )
-                }
-
-                Text(
-                    text =
-                        "₹${String.format(
-                            "%.2f",
-                            item.price *
-                                    item.quantity
-                        )}",
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            Spacer(
-                modifier = Modifier.height(14.dp)
             )
 
             Row(
@@ -1547,9 +2762,14 @@ private fun CartItemCard(
             ) {
 
                 Text(
-                    text = "Quantity",
-                    fontWeight =
-                        FontWeight.SemiBold
+                    text =
+                        if (isHindi) {
+                            "मात्रा"
+                        } else {
+                            "Quantity"
+                        },
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
 
                 Row(
@@ -1561,39 +2781,94 @@ private fun CartItemCard(
                         onClick = onDecrease,
                         enabled = !isUpdating
                     ) {
+
                         Text(
                             text = "−",
-                            style =
-                                MaterialTheme.typography
-                                    .headlineSmall
+                            fontSize = 24.sp
                         )
                     }
 
                     Text(
                         text = item.quantity.toString(),
-                        modifier =
-                            Modifier.padding(
-                                horizontal = 8.dp
-                            ),
-                        style =
-                            MaterialTheme.typography.titleMedium,
-                        fontWeight =
-                            FontWeight.Bold
+                        modifier = Modifier.padding(
+                            horizontal = 8.dp
+                        ),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
                     )
 
                     TextButton(
                         onClick = onIncrease,
                         enabled = !isUpdating
                     ) {
+
                         Text(
                             text = "+",
-                            style =
-                                MaterialTheme.typography
-                                    .headlineSmall
+                            fontSize = 22.sp
                         )
                     }
                 }
             }
         }
     }
+}
+
+// =============================================================
+// HELPERS
+// =============================================================
+
+private fun formatPaymentStatus(
+    status: String,
+    isHindi: Boolean
+): String {
+
+    return when (status.uppercase()) {
+
+        "PAID" ->
+            if (isHindi) {
+                "भुगतान प्राप्त"
+            } else {
+                "Paid"
+            }
+
+        "PENDING" ->
+            if (isHindi) {
+                "लंबित"
+            } else {
+                "Pending"
+            }
+
+        "FAILED" ->
+            if (isHindi) {
+                "असफल"
+            } else {
+                "Failed"
+            }
+
+        else ->
+            status
+    }
+}
+
+private fun formatOrderHistoryDate(
+    millis: Long,
+    isHindi: Boolean
+): String {
+
+    val locale =
+        if (isHindi) {
+            Locale.Builder()
+                .setLanguage("hi")
+                .setRegion("IN")
+                .build()
+        } else {
+            Locale.ENGLISH
+        }
+
+    return SimpleDateFormat(
+        "dd MMM yyyy, hh:mm a",
+        locale
+    ).format(
+        Date(millis)
+    )
 }

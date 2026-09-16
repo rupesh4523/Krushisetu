@@ -5,9 +5,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.sashya.krushisetu.data.local.LanguageManager
 import com.sashya.krushisetu.data.model.Advisory
 import com.sashya.krushisetu.data.model.AdvisoryUrgency
 import com.sashya.krushisetu.ui.navigation.AppDestination
@@ -32,32 +33,65 @@ import com.sashya.krushisetu.ui.theme.AlertOrange
 import com.sashya.krushisetu.ui.theme.LightLeafGreen
 import com.sashya.krushisetu.ui.theme.MutedText
 
+// =============================================================
+// FARMER BOTTOM NAVIGATION
+// =============================================================
+
 @Composable
 fun KrushiBottomBar(
     currentDestination: AppDestination,
     onDestinationSelected: (AppDestination) -> Unit
 ) {
+
+    /*
+     * IMPORTANT:
+     * We explicitly read LanguageManager.currentLanguage here.
+     *
+     * This makes Compose recompose the bottom bar whenever
+     * the user changes English <-> Hindi from Profile.
+     *
+     * No Firebase data is touched.
+     */
+
+    val isHindi =
+        LanguageManager.isHindi()
+
     NavigationBar {
+
         AppDestination.entries
             .filter {
                 it != AppDestination.PLANT_SCAN &&
                         it != AppDestination.CONSULTATION
             }
             .forEach { destination ->
+
                 NavigationBarItem(
-                    selected = destination == currentDestination,
+
+                    selected =
+                        destination == currentDestination,
+
                     onClick = {
-                        onDestinationSelected(destination)
+                        onDestinationSelected(
+                            destination
+                        )
                     },
+
                     icon = {
+
                         Text(
-                            destination.emoji,
+                            text = destination.emoji,
                             fontSize = 19.sp
                         )
                     },
+
                     label = {
+
                         Text(
-                            destination.label,
+                            text =
+                                getBottomBarLabel(
+                                    destination = destination,
+                                    isHindi = isHindi
+                                ),
                             fontSize = 10.sp
                         )
                     }
@@ -66,97 +100,247 @@ fun KrushiBottomBar(
     }
 }
 
+// =============================================================
+// BOTTOM BAR LABELS
+// =============================================================
+
+private fun getBottomBarLabel(
+    destination: AppDestination,
+    isHindi: Boolean
+): String {
+
+    return if (isHindi) {
+
+        when (destination) {
+
+            AppDestination.HOME ->
+                "होम"
+
+            AppDestination.CROPS ->
+                "मेरी फसलें"
+
+            AppDestination.ADVISORY ->
+                "सलाह"
+
+            AppDestination.PLANT_SCAN ->
+                "पौधे की जाँच"
+
+            AppDestination.CONSULTATION ->
+                "विशेषज्ञ"
+
+            AppDestination.SHOP ->
+                "बाज़ार"
+
+            AppDestination.PROFILE ->
+                "प्रोफ़ाइल"
+        }
+
+    } else {
+
+        when (destination) {
+
+            AppDestination.HOME ->
+                "Home"
+
+            AppDestination.CROPS ->
+                "My Crops"
+
+            AppDestination.ADVISORY ->
+                "Advisory"
+
+            AppDestination.PLANT_SCAN ->
+                "Plant Scan"
+
+            AppDestination.CONSULTATION ->
+                "Experts"
+
+            AppDestination.SHOP ->
+                "Shop"
+
+            AppDestination.PROFILE ->
+                "Profile"
+        }
+    }
+}
+
+// =============================================================
+// SCREEN HEADER
+// =============================================================
+
 @Composable
-fun ScreenHeader(title: String, subtitle: String) {
+fun ScreenHeader(
+    title: String,
+    subtitle: String
+) {
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 16.dp)
+            .padding(
+                horizontal = 20.dp,
+                vertical = 16.dp
+            )
     ) {
+
         Text(
             text = title,
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold
         )
+
         Text(
             text = subtitle,
             style = MaterialTheme.typography.bodyMedium,
             color = MutedText,
-            modifier = Modifier.padding(top = 4.dp)
+            modifier = Modifier.padding(
+                top = 4.dp
+            )
         )
     }
 }
 
+// =============================================================
+// SECTION TITLE
+// =============================================================
+
 @Composable
-fun SectionTitle(title: String, action: String? = null, onAction: (() -> Unit)? = null) {
+fun SectionTitle(
+    title: String,
+    action: String? = null,
+    onAction: (() -> Unit)? = null
+) {
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(
+                horizontal = 20.dp,
+                vertical = 8.dp
+            ),
+        verticalAlignment =
+            Alignment.CenterVertically,
+        horizontalArrangement =
+            Arrangement.SpaceBetween
     ) {
+
         Text(
             text = title,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold
         )
-        if (action != null && onAction != null) {
+
+        if (
+            action != null &&
+            onAction != null
+        ) {
+
             Text(
                 text = action,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.clickable(onClick = onAction)
+                modifier = Modifier.clickable(
+                    onClick = onAction
+                )
             )
         }
     }
 }
 
+// =============================================================
+// ADVISORY CARD
+// =============================================================
+
 @Composable
-fun AdvisoryCard(advisory: Advisory, modifier: Modifier = Modifier) {
-    val container = if (advisory.urgency == AdvisoryUrgency.IMPORTANT) {
-        Color(0xFFFFF3E5)
-    } else {
-        LightLeafGreen
-    }
-    val accent = if (advisory.urgency == AdvisoryUrgency.IMPORTANT) AlertOrange else MaterialTheme.colorScheme.primary
+fun AdvisoryCard(
+    advisory: Advisory,
+    modifier: Modifier = Modifier
+) {
+
+    val container =
+        if (
+            advisory.urgency ==
+            AdvisoryUrgency.IMPORTANT
+        ) {
+
+            Color(0xFFFFF3E5)
+
+        } else {
+
+            LightLeafGreen
+        }
+
+    val accent =
+        if (
+            advisory.urgency ==
+            AdvisoryUrgency.IMPORTANT
+        ) {
+
+            AlertOrange
+
+        } else {
+
+            MaterialTheme.colorScheme.primary
+        }
 
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = container)
+        colors = CardDefaults.cardColors(
+            containerColor = container
+        )
     ) {
+
         Row(
             modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.Top
+            verticalAlignment =
+                Alignment.Top
         ) {
+
             Text(
                 text = advisory.emoji,
                 fontSize = 24.sp,
                 modifier = Modifier
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.65f))
+                    .background(
+                        Color.White.copy(
+                            alpha = 0.65f
+                        )
+                    )
                     .padding(8.dp)
             )
-            Spacer(Modifier.width(12.dp))
+
+            Spacer(
+                modifier = Modifier.width(12.dp)
+            )
+
             Column {
+
                 Text(
                     text = advisory.category.uppercase(),
-                    style = MaterialTheme.typography.labelSmall,
+                    style =
+                        MaterialTheme.typography.labelSmall,
                     color = accent,
                     fontWeight = FontWeight.Bold
                 )
+
                 Text(
                     text = advisory.title,
-                    style = MaterialTheme.typography.titleSmall,
+                    style =
+                        MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 2.dp)
+                    modifier = Modifier.padding(
+                        top = 2.dp
+                    )
                 )
+
                 Text(
                     text = advisory.message,
-                    style = MaterialTheme.typography.bodySmall,
+                    style =
+                        MaterialTheme.typography.bodySmall,
                     color = MutedText,
-                    modifier = Modifier.padding(top = 4.dp)
+                    modifier = Modifier.padding(
+                        top = 4.dp
+                    )
                 )
             }
         }

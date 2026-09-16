@@ -1,3 +1,14 @@
 <resources>
-    <string name="app_name">Krushisetu</string>
+
+    <string name="app_name" translatable="false">Krushisetu</string>
+
+    <!-- Farmer bottom navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_my_crops">My Crops</string>
+    <string name="nav_advisory">Advisory</string>
+    <string name="nav_plant_scan">Plant scan</string>
+    <string name="nav_shop">Shop</string>
+    <string name="nav_experts">Experts</string>
+    <string name="nav_profile">Profile</string>
+
 </resources>

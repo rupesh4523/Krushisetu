@@ -31,7 +31,6 @@ import com.sashya.krushisetu.feature.profile.ProfileScreen
 import com.sashya.krushisetu.feature.supplier.SupplierAnalyticsScreen
 import com.sashya.krushisetu.feature.supplier.SupplierBottomBar
 import com.sashya.krushisetu.feature.supplier.SupplierDashboardScreen
-import com.sashya.krushisetu.feature.supplier.SupplierDeliveryScreen
 import com.sashya.krushisetu.feature.supplier.SupplierOrdersScreen
 import com.sashya.krushisetu.feature.supplier.SupplierPaymentsScreen
 import com.sashya.krushisetu.feature.supplier.SupplierProductsScreen
@@ -46,6 +45,7 @@ import com.sashya.krushisetu.feature.advisory.AdvisorScheduleScreen
 import com.sashya.krushisetu.feature.advisory.AdvisorProfileScreen
 import com.sashya.krushisetu.feature.advisory.AdvisorFarmerDetailsScreen
 import com.sashya.krushisetu.feature.shop.ShopScreen
+import com.sashya.krushisetu.data.local.LanguageManager
 private enum class AppEntry {
     WELCOME,
     AUTHENTICATION,
@@ -56,6 +56,8 @@ private enum class AppEntry {
 fun KrushiSetuApp() {
 
     val context = LocalContext.current
+
+    LanguageManager.initialize(context)
 
     val authRepository =
         remember {
@@ -660,11 +662,6 @@ fun KrushiSetuApp() {
                                     "ORDERS"
                             },
 
-                            onDelivery = {
-
-                                supplierScreen =
-                                    "DELIVERY"
-                            },
 
                             onPayments = {
 
@@ -805,19 +802,6 @@ fun KrushiSetuApp() {
                                     }
                                 )
 
-                            // =====================================
-                            // SUPPLIER DELIVERY
-                            // =====================================
-
-                            "DELIVERY" ->
-                                SupplierDeliveryScreen(
-
-                                    onBack = {
-
-                                        supplierScreen =
-                                            "DASHBOARD"
-                                    }
-                                )
 
                             // =====================================
                             // SUPPLIER PAYMENTS

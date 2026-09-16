@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 import com.sashya.krushisetu.data.crop.CropRepository
+import com.sashya.krushisetu.data.local.LanguageManager
 import com.sashya.krushisetu.data.local.SampleData
 import com.sashya.krushisetu.data.model.Crop
 import com.sashya.krushisetu.data.model.UserProfile
@@ -68,6 +69,7 @@ fun HomeScreen(
         mutableStateOf<String?>(null)
     }
 
+
     // ---------------------------------------------------------
     // CROPS STATE
     // ---------------------------------------------------------
@@ -80,6 +82,7 @@ fun HomeScreen(
         mutableStateOf<List<Crop>>(emptyList())
     }
 
+
     // ---------------------------------------------------------
     // WEATHER REPOSITORY
     // ---------------------------------------------------------
@@ -88,23 +91,30 @@ fun HomeScreen(
         WeatherRepository()
     }
 
+
     // ---------------------------------------------------------
     // LISTEN TO THE SAME FIRESTORE CROPS USED BY "MY CROPS"
     // ---------------------------------------------------------
 
     DisposableEffect(Unit) {
-        val listener = cropRepository.getCrops { result ->
-            result.onSuccess { loadedCrops ->
-                crops = loadedCrops
-            }.onFailure {
-                crops = emptyList()
+
+        val listener =
+            cropRepository.getCrops { result ->
+
+                result
+                    .onSuccess { loadedCrops ->
+                        crops = loadedCrops
+                    }
+                    .onFailure {
+                        crops = emptyList()
+                    }
             }
-        }
 
         onDispose {
             listener?.remove()
         }
     }
+
 
     // ---------------------------------------------------------
     // LOAD FARM WEATHER
@@ -122,6 +132,7 @@ fun HomeScreen(
         weatherError = null
         weatherData = null
 
+
         // -----------------------------------------------------
         // Get saved farm coordinates
         // -----------------------------------------------------
@@ -131,6 +142,7 @@ fun HomeScreen(
 
         val longitude =
             userProfile?.farmLongitude
+
 
         // -----------------------------------------------------
         // We need both coordinates.
@@ -142,13 +154,25 @@ fun HomeScreen(
 
             weatherError =
                 if (userProfile == null) {
-                    "Your farm profile is still loading."
+
+                    if (LanguageManager.isHindi()) {
+                        "आपकी खेत प्रोफ़ाइल अभी लोड हो रही है।"
+                    } else {
+                        "Your farm profile is still loading."
+                    }
+
                 } else {
-                    "Farm location coordinates are not available. Please update your farm location."
+
+                    if (LanguageManager.isHindi()) {
+                        "खेत के स्थान के निर्देशांक उपलब्ध नहीं हैं। कृपया अपने खेत का स्थान अपडेट करें।"
+                    } else {
+                        "Farm location coordinates are not available. Please update your farm location."
+                    }
                 }
 
             return@LaunchedEffect
         }
+
 
         // -----------------------------------------------------
         // Build a friendly farm location name
@@ -184,12 +208,19 @@ fun HomeScreen(
 
                     append(userProfile.district.trim())
                 }
+
             }.ifBlank {
-                "Your farm"
+
+                if (LanguageManager.isHindi()) {
+                    "आपका खेत"
+                } else {
+                    "Your farm"
+                }
             }
 
+
         // -----------------------------------------------------
-        // Request WEATHER FOR FARM LOCATION
+        // REQUEST WEATHER FOR FARM LOCATION
         //
         // NOT phone/device location.
         // -----------------------------------------------------
@@ -210,12 +241,18 @@ fun HomeScreen(
             .onFailure {
 
                 weatherData = null
+
                 weatherError =
-                    "Unable to load weather for your farm."
+                    if (LanguageManager.isHindi()) {
+                        "आपके खेत के लिए मौसम लोड नहीं हो सका।"
+                    } else {
+                        "Unable to load weather for your farm."
+                    }
             }
 
         weatherLoading = false
     }
+
 
     // ---------------------------------------------------------
     // HOME UI
@@ -232,10 +269,23 @@ fun HomeScreen(
         item {
 
             ScreenHeader(
-                title = "Namaste, " + farmerName + "! 👋",
-                subtitle = "Here is your farm update for today."
+
+                title =
+                    if (LanguageManager.isHindi()) {
+                        "नमस्ते, $farmerName! 👋"
+                    } else {
+                        "Namaste, $farmerName! 👋"
+                    },
+
+                subtitle =
+                    if (LanguageManager.isHindi()) {
+                        "आज आपके खेत की जानकारी यहाँ है।"
+                    } else {
+                        "Here is your farm update for today."
+                    }
             )
         }
+
 
         item {
 
@@ -246,6 +296,7 @@ fun HomeScreen(
             )
         }
 
+
         item {
 
             PlantScanBanner(
@@ -253,10 +304,15 @@ fun HomeScreen(
             )
         }
 
+
         item {
 
             SectionTitle(
-                "Quick actions"
+                if (LanguageManager.isHindi()) {
+                    "त्वरित कार्य"
+                } else {
+                    "Quick actions"
+                }
             )
 
             QuickActions(
@@ -266,12 +322,19 @@ fun HomeScreen(
             )
         }
 
+
         item {
+
             SectionTitle(
-                "Today's advisory"
+                if (LanguageManager.isHindi()) {
+                    "आज की सलाह"
+                } else {
+                    "Today's advisory"
+                }
             )
 
             SampleData.advisories.forEach { advisory ->
+
                 AdvisoryCard(
                     advisory = advisory,
                     modifier = Modifier.padding(
@@ -282,6 +345,7 @@ fun HomeScreen(
             }
         }
 
+
         item {
 
             Spacer(
@@ -290,6 +354,7 @@ fun HomeScreen(
         }
     }
 }
+
 
 // =============================================================
 // WEATHER CARD
@@ -306,7 +371,9 @@ private fun WeatherHeroCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp),
+
         shape = RoundedCornerShape(24.dp),
+
         colors = CardDefaults.cardColors(
             containerColor = LeafGreen
         )
@@ -324,44 +391,72 @@ private fun WeatherHeroCard(
                 if (isLoading) {
 
                     Text(
-                        text = "Your farm",
+                        text =
+                            if (LanguageManager.isHindi()) {
+                                "आपका खेत"
+                            } else {
+                                "Your farm"
+                            },
+
                         color = Color.White.copy(
                             alpha = 0.82f
                         ),
-                        style = MaterialTheme.typography.labelLarge
+
+                        style =
+                            MaterialTheme.typography.labelLarge
                     )
 
                     Text(
-                        text = "Loading...",
+                        text =
+                            if (LanguageManager.isHindi()) {
+                                "लोड हो रहा है..."
+                            } else {
+                                "Loading..."
+                            },
+
                         color = Color.White,
                         fontSize = 42.sp,
                         fontWeight = FontWeight.Bold,
+
                         modifier = Modifier.padding(
                             top = 4.dp
                         )
                     )
 
                     Text(
-                        text = "Getting farm weather",
+                        text =
+                            if (LanguageManager.isHindi()) {
+                                "खेत का मौसम प्राप्त किया जा रहा है"
+                            } else {
+                                "Getting farm weather"
+                            },
+
                         color = Color.White,
-                        style = MaterialTheme.typography.bodyMedium
+
+                        style =
+                            MaterialTheme.typography.bodyMedium
                     )
 
                 } else if (weather != null) {
 
                     Text(
                         text = weather.location,
+
                         color = Color.White.copy(
                             alpha = 0.82f
                         ),
-                        style = MaterialTheme.typography.labelLarge
+
+                        style =
+                            MaterialTheme.typography.labelLarge
                     )
 
                     Text(
                         text = weather.temperature,
+
                         color = Color.White,
                         fontSize = 42.sp,
                         fontWeight = FontWeight.Bold,
+
                         modifier = Modifier.padding(
                             top = 4.dp
                         )
@@ -369,17 +464,28 @@ private fun WeatherHeroCard(
 
                     Text(
                         text = weather.condition,
+
                         color = Color.White,
-                        style = MaterialTheme.typography.bodyMedium
+
+                        style =
+                            MaterialTheme.typography.bodyMedium
                     )
 
                     Text(
                         text =
-                            "Rain chance ${weather.rainChance}  •  Humidity ${weather.humidity}",
+                            if (LanguageManager.isHindi()) {
+                                "बारिश की संभावना ${weather.rainChance}  •  नमी ${weather.humidity}"
+                            } else {
+                                "Rain chance ${weather.rainChance}  •  Humidity ${weather.humidity}"
+                            },
+
                         color = Color.White.copy(
                             alpha = 0.82f
                         ),
-                        style = MaterialTheme.typography.labelMedium,
+
+                        style =
+                            MaterialTheme.typography.labelMedium,
+
                         modifier = Modifier.padding(
                             top = 10.dp
                         )
@@ -388,18 +494,33 @@ private fun WeatherHeroCard(
                 } else {
 
                     Text(
-                        text = "Farm weather",
+                        text =
+                            if (LanguageManager.isHindi()) {
+                                "खेत का मौसम"
+                            } else {
+                                "Farm weather"
+                            },
+
                         color = Color.White.copy(
                             alpha = 0.82f
                         ),
-                        style = MaterialTheme.typography.labelLarge
+
+                        style =
+                            MaterialTheme.typography.labelLarge
                     )
 
                     Text(
-                        text = "Weather unavailable",
+                        text =
+                            if (LanguageManager.isHindi()) {
+                                "मौसम उपलब्ध नहीं है"
+                            } else {
+                                "Weather unavailable"
+                            },
+
                         color = Color.White,
                         fontSize = 28.sp,
                         fontWeight = FontWeight.Bold,
+
                         modifier = Modifier.padding(
                             top = 4.dp
                         )
@@ -408,9 +529,16 @@ private fun WeatherHeroCard(
                     Text(
                         text =
                             errorMessage
-                                ?: "Please update your farm location.",
+                                ?: if (LanguageManager.isHindi()) {
+                                    "कृपया अपने खेत का स्थान अपडेट करें।"
+                                } else {
+                                    "Please update your farm location."
+                                },
+
                         color = Color.White,
-                        style = MaterialTheme.typography.bodyMedium
+
+                        style =
+                            MaterialTheme.typography.bodyMedium
                     )
                 }
             }
@@ -422,6 +550,7 @@ private fun WeatherHeroCard(
         }
     }
 }
+
 
 // =============================================================
 // PLANT SCAN BANNER
@@ -442,7 +571,9 @@ private fun PlantScanBanner(
             .clickable(
                 onClick = onOpenPlantScan
             ),
+
         shape = RoundedCornerShape(20.dp),
+
         colors = CardDefaults.cardColors(
             containerColor =
                 MaterialTheme.colorScheme.primaryContainer
@@ -468,14 +599,31 @@ private fun PlantScanBanner(
             ) {
 
                 Text(
-                    "Plant Scan",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
+                    text =
+                        if (LanguageManager.isHindi()) {
+                            "पौधे की जाँच"
+                        } else {
+                            "Plant Scan"
+                        },
+
+                    style =
+                        MaterialTheme.typography.titleSmall,
+
+                    fontWeight =
+                        FontWeight.Bold
                 )
 
                 Text(
-                    "Capture a plant photo for an AI-assisted health check.",
-                    style = MaterialTheme.typography.bodySmall,
+                    text =
+                        if (LanguageManager.isHindi()) {
+                            "AI की सहायता से पौधे की सेहत जाँचने के लिए फोटो लें।"
+                        } else {
+                            "Capture a plant photo for an AI-assisted health check."
+                        },
+
+                    style =
+                        MaterialTheme.typography.bodySmall,
+
                     color = MutedText
                 )
             }
@@ -488,6 +636,7 @@ private fun PlantScanBanner(
         }
     }
 }
+
 
 // =============================================================
 // QUICK ACTIONS
@@ -504,32 +653,55 @@ private fun QuickActions(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp),
+
         horizontalArrangement =
             Arrangement.spacedBy(10.dp)
     ) {
 
         QuickAction(
             "🌱",
-            "My crops",
+
+            if (LanguageManager.isHindi()) {
+                "मेरी फसलें"
+            } else {
+                "My crops"
+            },
+
             Modifier.weight(1f),
+
             onOpenCrops
         )
 
         QuickAction(
             "✦",
-            "Get advice",
+
+            if (LanguageManager.isHindi()) {
+                "सलाह लें"
+            } else {
+                "Get advice"
+            },
+
             Modifier.weight(1f),
+
             onOpenAdvisory
         )
 
         QuickAction(
             "◉",
-            "Ask expert",
+
+            if (LanguageManager.isHindi()) {
+                "विशेषज्ञ से पूछें"
+            } else {
+                "Ask expert"
+            },
+
             Modifier.weight(1f),
+
             onOpenConsultation
         )
     }
 }
+
 
 // =============================================================
 // QUICK ACTION CARD
@@ -547,7 +719,9 @@ private fun QuickAction(
         modifier = modifier.clickable(
             onClick = onClick
         ),
+
         shape = RoundedCornerShape(18.dp),
+
         colors = CardDefaults.cardColors(
             containerColor =
                 MaterialTheme.colorScheme.surfaceVariant
@@ -559,6 +733,7 @@ private fun QuickAction(
                 vertical = 14.dp,
                 horizontal = 8.dp
             ),
+
             horizontalAlignment =
                 Alignment.CenterHorizontally
         ) {
@@ -570,8 +745,13 @@ private fun QuickAction(
 
             Text(
                 label,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
+
+                style =
+                    MaterialTheme.typography.labelMedium,
+
+                fontWeight =
+                    FontWeight.SemiBold,
+
                 modifier = Modifier.padding(
                     top = 5.dp
                 )
@@ -579,6 +759,7 @@ private fun QuickAction(
         }
     }
 }
+
 
 // =============================================================
 // CROP SUMMARY
@@ -588,6 +769,7 @@ private fun QuickAction(
 private fun CropSummaryCard(
     crop: Crop
 ) {
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -595,7 +777,9 @@ private fun CropSummaryCard(
                 horizontal = 20.dp,
                 vertical = 5.dp
             ),
+
         shape = RoundedCornerShape(20.dp),
+
         colors = CardDefaults.cardColors(
             containerColor = Color.White
         )
@@ -603,6 +787,7 @@ private fun CropSummaryCard(
 
         Row(
             modifier = Modifier.padding(16.dp),
+
             verticalAlignment =
                 Alignment.CenterVertically
         ) {
@@ -622,20 +807,31 @@ private fun CropSummaryCard(
 
                 Text(
                     crop.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+
+                    style =
+                        MaterialTheme.typography.titleMedium,
+
+                    fontWeight =
+                        FontWeight.Bold
                 )
 
                 Text(
                     crop.variety + " • " + crop.area,
-                    style = MaterialTheme.typography.bodySmall,
+
+                    style =
+                        MaterialTheme.typography.bodySmall,
+
                     color = MutedText
                 )
 
                 Text(
                     crop.stage,
-                    style = MaterialTheme.typography.labelMedium,
+
+                    style =
+                        MaterialTheme.typography.labelMedium,
+
                     color = LeafGreen,
+
                     modifier = Modifier.padding(
                         top = 4.dp
                     )
@@ -643,56 +839,118 @@ private fun CropSummaryCard(
             }
 
             Text(
-                "Planted " + crop.plantingDate.ifBlank { "date not specified" },
+                if (LanguageManager.isHindi()) {
+                    "लगाया गया " +
+                            crop.plantingDate.ifBlank {
+                                "तारीख उपलब्ध नहीं"
+                            }
+                } else {
+                    "Planted " +
+                            crop.plantingDate.ifBlank {
+                                "date not specified"
+                            }
+                },
+
                 color = LeafGreen,
-                style = MaterialTheme.typography.labelSmall
+
+                style =
+                    MaterialTheme.typography.labelSmall
             )
         }
     }
 }
 
+
+// =============================================================
+// EMPTY CROPS CARD
+// =============================================================
+
 @Composable
 private fun EmptyCropsCard(
     onOpenCrops: () -> Unit
 ) {
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
-            .clickable(onClick = onOpenCrops),
+            .clickable(
+                onClick = onOpenCrops
+            ),
+
         shape = RoundedCornerShape(20.dp),
+
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
+            containerColor =
+                MaterialTheme.colorScheme.surfaceVariant
         )
     ) {
+
         Row(
             modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+
+            verticalAlignment =
+                Alignment.CenterVertically
         ) {
+
             Text(
                 text = "🌱",
                 fontSize = 34.sp
             )
-            Spacer(Modifier.width(12.dp))
+
+            Spacer(
+                Modifier.width(12.dp)
+            )
+
             Column(
                 modifier = Modifier.weight(1f)
             ) {
+
                 Text(
-                    text = "No crops added yet",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
+                    text =
+                        if (LanguageManager.isHindi()) {
+                            "अभी कोई फसल नहीं जोड़ी गई"
+                        } else {
+                            "No crops added yet"
+                        },
+
+                    style =
+                        MaterialTheme.typography.titleSmall,
+
+                    fontWeight =
+                        FontWeight.Bold
                 )
+
                 Text(
-                    text = "Add your first crop to see it on the dashboard.",
-                    style = MaterialTheme.typography.bodySmall,
+                    text =
+                        if (LanguageManager.isHindi()) {
+                            "डैशबोर्ड पर देखने के लिए अपनी पहली फसल जोड़ें।"
+                        } else {
+                            "Add your first crop to see it on the dashboard."
+                        },
+
+                    style =
+                        MaterialTheme.typography.bodySmall,
+
                     color = MutedText
                 )
             }
+
             Text(
-                text = "Add →",
+                text =
+                    if (LanguageManager.isHindi()) {
+                        "जोड़ें →"
+                    } else {
+                        "Add →"
+                    },
+
                 color = LeafGreen,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold
+
+                style =
+                    MaterialTheme.typography.labelLarge,
+
+                fontWeight =
+                    FontWeight.SemiBold
             )
         }
     }

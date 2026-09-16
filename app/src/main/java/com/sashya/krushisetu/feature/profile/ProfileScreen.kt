@@ -21,10 +21,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.sashya.krushisetu.data.local.LanguageManager
 import com.sashya.krushisetu.data.model.UserProfile
 import com.sashya.krushisetu.ui.components.ScreenHeader
 import com.sashya.krushisetu.ui.theme.LightLeafGreen
 import com.sashya.krushisetu.ui.theme.MutedText
+import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun ProfileScreen(
@@ -35,6 +37,8 @@ fun ProfileScreen(
     onSignOut: () -> Unit,
     onOpenLogin: () -> Unit
 ) {
+
+    val context = LocalContext.current
 
     LazyColumn(
         modifier = modifier,
@@ -50,8 +54,19 @@ fun ProfileScreen(
         item {
 
             ScreenHeader(
-                title = "My profile ☺",
-                subtitle = "Your farmer and farm details."
+                title =
+                    if (LanguageManager.isHindi()) {
+                        "मेरी प्रोफ़ाइल ☺"
+                    } else {
+                        "My profile ☺"
+                    },
+
+                subtitle =
+                    if (LanguageManager.isHindi()) {
+                        "आपकी किसान और खेत की जानकारी।"
+                    } else {
+                        "Your farmer and farm details."
+                    }
             )
         }
 
@@ -70,15 +85,55 @@ fun ProfileScreen(
 
 
         // ---------------------------------------------------------
+        // LANGUAGE
+        // ---------------------------------------------------------
+
+        item {
+
+            Text(
+                text =
+                    if (LanguageManager.isHindi()) {
+                        "भाषा"
+                    } else {
+                        "Language"
+                    },
+
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+
+                modifier = Modifier.padding(
+                    horizontal = 20.dp,
+                    vertical = 16.dp
+                )
+            )
+        }
+
+
+        item {
+
+            LanguageSelectionCard(
+                context = context
+            )
+        }
+
+
+        // ---------------------------------------------------------
         // PERSONAL DETAILS
         // ---------------------------------------------------------
 
         item {
 
             Text(
-                text = "Personal details",
+                text =
+                    if (LanguageManager.isHindi()) {
+                        "व्यक्तिगत जानकारी"
+                    } else {
+                        "Personal details"
+                    },
+
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
+
                 modifier = Modifier.padding(
                     horizontal = 20.dp,
                     vertical = 16.dp
@@ -91,12 +146,23 @@ fun ProfileScreen(
 
             ProfileDetail(
                 emoji = "📧",
-                title = "Email",
+
+                title =
+                    if (LanguageManager.isHindi()) {
+                        "ईमेल"
+                    } else {
+                        "Email"
+                    },
+
                 value =
                     userProfile?.email
                         ?.takeIf { it.isNotBlank() }
                         ?: signedInEmail
-                        ?: "Not available"
+                        ?: if (LanguageManager.isHindi()) {
+                            "उपलब्ध नहीं"
+                        } else {
+                            "Not available"
+                        }
             )
         }
 
@@ -105,11 +171,22 @@ fun ProfileScreen(
 
             ProfileDetail(
                 emoji = "☎",
-                title = "Phone number",
+
+                title =
+                    if (LanguageManager.isHindi()) {
+                        "फ़ोन नंबर"
+                    } else {
+                        "Phone number"
+                    },
+
                 value =
                     userProfile?.phone
                         ?.takeIf { it.isNotBlank() }
-                        ?: "Not added"
+                        ?: if (LanguageManager.isHindi()) {
+                            "जोड़ा नहीं गया"
+                        } else {
+                            "Not added"
+                        }
             )
         }
 
@@ -121,9 +198,16 @@ fun ProfileScreen(
         item {
 
             Text(
-                text = "Farm details",
+                text =
+                    if (LanguageManager.isHindi()) {
+                        "खेत की जानकारी"
+                    } else {
+                        "Farm details"
+                    },
+
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
+
                 modifier = Modifier.padding(
                     horizontal = 20.dp,
                     vertical = 16.dp
@@ -136,11 +220,22 @@ fun ProfileScreen(
 
             ProfileDetail(
                 emoji = "🏘️",
-                title = "Village",
+
+                title =
+                    if (LanguageManager.isHindi()) {
+                        "गाँव"
+                    } else {
+                        "Village"
+                    },
+
                 value =
                     userProfile?.village
                         ?.takeIf { it.isNotBlank() }
-                        ?: "Not added"
+                        ?: if (LanguageManager.isHindi()) {
+                            "जोड़ा नहीं गया"
+                        } else {
+                            "Not added"
+                        }
             )
         }
 
@@ -149,11 +244,22 @@ fun ProfileScreen(
 
             ProfileDetail(
                 emoji = "📍",
-                title = "District",
+
+                title =
+                    if (LanguageManager.isHindi()) {
+                        "जिला"
+                    } else {
+                        "District"
+                    },
+
                 value =
                     userProfile?.district
                         ?.takeIf { it.isNotBlank() }
-                        ?: "Not added"
+                        ?: if (LanguageManager.isHindi()) {
+                            "जोड़ा नहीं गया"
+                        } else {
+                            "Not added"
+                        }
             )
         }
 
@@ -162,11 +268,22 @@ fun ProfileScreen(
 
             ProfileDetail(
                 emoji = "🌾",
-                title = "Farm location",
+
+                title =
+                    if (LanguageManager.isHindi()) {
+                        "खेत का स्थान"
+                    } else {
+                        "Farm location"
+                    },
+
                 value =
                     userProfile?.farmLocation
                         ?.takeIf { it.isNotBlank() }
-                        ?: "Not added"
+                        ?: if (LanguageManager.isHindi()) {
+                            "जोड़ा नहीं गया"
+                        } else {
+                            "Not added"
+                        }
             )
         }
 
@@ -175,7 +292,14 @@ fun ProfileScreen(
 
             ProfileDetail(
                 emoji = "🚜",
-                title = "Number of farms",
+
+                title =
+                    if (LanguageManager.isHindi()) {
+                        "खेतों की संख्या"
+                    } else {
+                        "Number of farms"
+                    },
+
                 value =
                     if (
                         userProfile != null &&
@@ -183,7 +307,11 @@ fun ProfileScreen(
                     ) {
                         userProfile.numberOfFarms.toString()
                     } else {
-                        "Not added"
+                        if (LanguageManager.isHindi()) {
+                            "जोड़ा नहीं गया"
+                        } else {
+                            "Not added"
+                        }
                     }
             )
         }
@@ -193,15 +321,32 @@ fun ProfileScreen(
 
             ProfileDetail(
                 emoji = "📐",
-                title = "Total farm area",
+
+                title =
+                    if (LanguageManager.isHindi()) {
+                        "कुल खेत का क्षेत्रफल"
+                    } else {
+                        "Total farm area"
+                    },
+
                 value =
                     if (
                         userProfile != null &&
                         userProfile.totalAreaAcres > 0
                     ) {
-                        "${userProfile.totalAreaAcres} acres"
+                        "${userProfile.totalAreaAcres} ${
+                            if (LanguageManager.isHindi()) {
+                                "एकड़"
+                            } else {
+                                "acres"
+                            }
+                        }"
                     } else {
-                        "Not added"
+                        if (LanguageManager.isHindi()) {
+                            "जोड़ा नहीं गया"
+                        } else {
+                            "Not added"
+                        }
                     }
             )
         }
@@ -215,11 +360,22 @@ fun ProfileScreen(
 
             ProfileDetail(
                 emoji = "🗺️",
-                title = "Registered location",
+
+                title =
+                    if (LanguageManager.isHindi()) {
+                        "पंजीकृत स्थान"
+                    } else {
+                        "Registered location"
+                    },
+
                 value =
                     userProfile?.location
                         ?.takeIf { it.isNotBlank() }
-                        ?: "Not added"
+                        ?: if (LanguageManager.isHindi()) {
+                            "जोड़ा नहीं गया"
+                        } else {
+                            "Not added"
+                        }
             )
         }
 
@@ -234,17 +390,24 @@ fun ProfileScreen(
 
                 OutlinedButton(
                     onClick = onSignOut,
+
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(
                             horizontal = 20.dp,
                             vertical = 16.dp
                         ),
+
                     shape = RoundedCornerShape(14.dp)
                 ) {
 
                     Text(
-                        text = "Sign out"
+                        text =
+                            if (LanguageManager.isHindi()) {
+                                "साइन आउट"
+                            } else {
+                                "Sign out"
+                            }
                     )
                 }
 
@@ -252,17 +415,118 @@ fun ProfileScreen(
 
                 OutlinedButton(
                     onClick = onOpenLogin,
+
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(
                             horizontal = 20.dp,
                             vertical = 16.dp
                         ),
+
                     shape = RoundedCornerShape(14.dp)
                 ) {
 
                     Text(
-                        text = "Sign in to save your profile"
+                        text =
+                            if (LanguageManager.isHindi()) {
+                                "अपनी प्रोफ़ाइल सुरक्षित करने के लिए साइन इन करें"
+                            } else {
+                                "Sign in to save your profile"
+                            }
+                    )
+                }
+            }
+        }
+    }
+}
+
+
+// =============================================================
+// LANGUAGE SELECTION CARD
+// =============================================================
+
+@Composable
+private fun LanguageSelectionCard(
+    context: android.content.Context
+) {
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = 20.dp
+            ),
+
+        shape = RoundedCornerShape(16.dp),
+
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        )
+    ) {
+
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+
+            Text(
+                text =
+                    if (LanguageManager.isHindi()) {
+                        "ऐप की भाषा चुनें"
+                    } else {
+                        "Choose app language"
+                    },
+
+                style = MaterialTheme.typography.bodyMedium,
+
+                color = MutedText
+            )
+
+            Spacer(
+                modifier = Modifier.padding(top = 8.dp)
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+
+                OutlinedButton(
+                    onClick = {
+                        LanguageManager.setLanguage(
+                            context = context,
+                            language = LanguageManager.ENGLISH
+                        )
+                    },
+
+                    modifier = Modifier.weight(1f),
+
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+
+                    Text(
+                        text = "English"
+                    )
+                }
+
+                Spacer(
+                    modifier = Modifier.width(12.dp)
+                )
+
+                OutlinedButton(
+                    onClick = {
+                        LanguageManager.setLanguage(
+                            context = context,
+                            language = LanguageManager.HINDI
+                        )
+                    },
+
+                    modifier = Modifier.weight(1f),
+
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+
+                    Text(
+                        text = "हिन्दी"
                     )
                 }
             }
@@ -287,7 +551,9 @@ private fun FarmerProfileCard(
             .padding(
                 horizontal = 20.dp
             ),
+
         shape = RoundedCornerShape(22.dp),
+
         colors = CardDefaults.cardColors(
             containerColor = LightLeafGreen
         )
@@ -315,7 +581,11 @@ private fun FarmerProfileCard(
                             ?.takeIf {
                                 it.isNotBlank()
                             }
-                            ?: "Farmer",
+                            ?: if (LanguageManager.isHindi()) {
+                                "किसान"
+                            } else {
+                                "Farmer"
+                            },
 
                     style =
                         MaterialTheme.typography.titleLarge,
@@ -328,7 +598,11 @@ private fun FarmerProfileCard(
                 Text(
                     text =
                         signedInEmail
-                            ?: "Farmer account",
+                            ?: if (LanguageManager.isHindi()) {
+                                "किसान खाता"
+                            } else {
+                                "Farmer account"
+                            },
 
                     style =
                         MaterialTheme.typography.bodyMedium,
@@ -360,7 +634,9 @@ private fun ProfileDetail(
                 horizontal = 20.dp,
                 vertical = 5.dp
             ),
+
         shape = RoundedCornerShape(16.dp),
+
         colors = CardDefaults.cardColors(
             containerColor = Color.White
         )

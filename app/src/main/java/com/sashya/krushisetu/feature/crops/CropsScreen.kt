@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sashya.krushisetu.data.crop.CropRepository
+import com.sashya.krushisetu.data.local.LanguageManager
 import com.sashya.krushisetu.data.model.Crop
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -67,6 +68,7 @@ fun CropsScreen(
         CropRepository()
     }
 
+
     // =========================================================
     // SCREEN STATE
     // =========================================================
@@ -83,20 +85,24 @@ fun CropsScreen(
         mutableStateOf<String?>(null)
     }
 
+
     // Controls Add Crop dialog
     var showAddCropDialog by remember {
         mutableStateOf(false)
     }
+
 
     // Stores the crop currently being edited
     var cropBeingEdited by remember {
         mutableStateOf<Crop?>(null)
     }
 
+
     // Stores the crop waiting for delete confirmation
     var cropBeingDeleted by remember {
         mutableStateOf<Crop?>(null)
     }
+
 
     // =========================================================
     // REAL-TIME FIRESTORE LISTENER
@@ -104,29 +110,37 @@ fun CropsScreen(
 
     DisposableEffect(Unit) {
 
-        val listener = cropRepository.getCrops { result ->
+        val listener =
+            cropRepository.getCrops { result ->
 
-            result.onSuccess { loadedCrops ->
+                result
+                    .onSuccess { loadedCrops ->
 
-                crops = loadedCrops
-                isLoading = false
-                errorMessage = null
+                        crops = loadedCrops
+                        isLoading = false
+                        errorMessage = null
 
-            }.onFailure { exception ->
+                    }
+                    .onFailure { exception ->
 
-                crops = emptyList()
-                isLoading = false
+                        crops = emptyList()
+                        isLoading = false
 
-                errorMessage =
-                    exception.localizedMessage
-                        ?: "Unable to load your crops."
+                        errorMessage =
+                            exception.localizedMessage
+                                ?: if (LanguageManager.isHindi()) {
+                                    "आपकी फसलें लोड नहीं हो सकीं।"
+                                } else {
+                                    "Unable to load your crops."
+                                }
+                    }
             }
-        }
 
         onDispose {
             listener?.remove()
         }
     }
+
 
     // =========================================================
     // SCREEN
@@ -152,9 +166,18 @@ fun CropsScreen(
             ) {
 
                 Text(
-                    text = "My crops 🌱",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
+                    text =
+                        if (LanguageManager.isHindi()) {
+                            "मेरी फसलें 🌱"
+                        } else {
+                            "My crops 🌱"
+                        },
+
+                    style =
+                        MaterialTheme.typography.headlineMedium,
+
+                    fontWeight =
+                        FontWeight.Bold
                 )
 
                 Spacer(
@@ -162,13 +185,21 @@ fun CropsScreen(
                 )
 
                 Text(
-                    text = "Track your crop stage and field details.",
-                    style = MaterialTheme.typography.bodyLarge
+                    text =
+                        if (LanguageManager.isHindi()) {
+                            "अपनी फसल की अवस्था और खेत की जानकारी देखें।"
+                        } else {
+                            "Track your crop stage and field details."
+                        },
+
+                    style =
+                        MaterialTheme.typography.bodyLarge
                 )
 
                 Spacer(
                     modifier = Modifier.height(20.dp)
                 )
+
 
                 // =================================================
                 // ADD CROP BUTTON
@@ -191,8 +222,15 @@ fun CropsScreen(
                 ) {
 
                     Text(
-                        text = "+  Add a crop",
-                        fontWeight = FontWeight.Bold
+                        text =
+                            if (LanguageManager.isHindi()) {
+                                "+  फसल जोड़ें"
+                            } else {
+                                "+  Add a crop"
+                            },
+
+                        fontWeight =
+                            FontWeight.Bold
                     )
                 }
 
@@ -200,6 +238,7 @@ fun CropsScreen(
                     modifier = Modifier.height(16.dp)
                 )
             }
+
 
             // =================================================
             // LOADING
@@ -211,12 +250,15 @@ fun CropsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
-                    contentAlignment = Alignment.Center
+
+                    contentAlignment =
+                        Alignment.Center
                 ) {
 
                     CircularProgressIndicator()
                 }
             }
+
 
             // =================================================
             // ERROR
@@ -229,15 +271,19 @@ fun CropsScreen(
                         .fillMaxWidth()
                         .weight(1f)
                         .padding(24.dp),
-                    contentAlignment = Alignment.Center
+
+                    contentAlignment =
+                        Alignment.Center
                 ) {
 
                     Text(
                         text = errorMessage!!,
-                        color = MaterialTheme.colorScheme.error
+                        color =
+                            MaterialTheme.colorScheme.error
                     )
                 }
             }
+
 
             // =================================================
             // EMPTY STATE
@@ -250,7 +296,9 @@ fun CropsScreen(
                         .fillMaxWidth()
                         .weight(1f)
                         .padding(32.dp),
-                    contentAlignment = Alignment.Center
+
+                    contentAlignment =
+                        Alignment.Center
                 ) {
 
                     Column(
@@ -260,6 +308,7 @@ fun CropsScreen(
 
                         Text(
                             text = "🌱",
+
                             style =
                                 MaterialTheme.typography.displaySmall
                         )
@@ -269,8 +318,15 @@ fun CropsScreen(
                         )
 
                         Text(
-                            text = "No crops added yet.",
-                            fontWeight = FontWeight.Bold
+                            text =
+                                if (LanguageManager.isHindi()) {
+                                    "अभी कोई फसल नहीं जोड़ी गई है।"
+                                } else {
+                                    "No crops added yet."
+                                },
+
+                            fontWeight =
+                                FontWeight.Bold
                         )
 
                         Spacer(
@@ -279,11 +335,16 @@ fun CropsScreen(
 
                         Text(
                             text =
-                                "Add your first crop to start tracking it."
+                                if (LanguageManager.isHindi()) {
+                                    "अपनी पहली फसल जोड़कर उसकी जानकारी देखना शुरू करें।"
+                                } else {
+                                    "Add your first crop to start tracking it."
+                                }
                         )
                     }
                 }
             }
+
 
             // =================================================
             // REAL CROPS
@@ -309,9 +370,11 @@ fun CropsScreen(
 
                     items(
                         items = crops,
+
                         key = { crop ->
                             crop.id
                         }
+
                     ) { crop ->
 
                         CropCard(
@@ -337,6 +400,7 @@ fun CropsScreen(
             }
         }
     }
+
 
     // =========================================================
     // ADD / EDIT CROP DIALOG
@@ -373,11 +437,16 @@ fun CropsScreen(
 
                             errorMessage =
                                 exception.localizedMessage
-                                    ?: "Unable to update the crop."
+                                    ?: if (LanguageManager.isHindi()) {
+                                        "फसल अपडेट नहीं हो सकी।"
+                                    } else {
+                                        "Unable to update the crop."
+                                    }
                         }
                     }
 
                 }
+
 
                 // =================================================
                 // ADD NEW CROP
@@ -396,13 +465,18 @@ fun CropsScreen(
 
                             errorMessage =
                                 exception.localizedMessage
-                                    ?: "Unable to save the crop."
+                                    ?: if (LanguageManager.isHindi()) {
+                                        "फसल सेव नहीं हो सकी।"
+                                    } else {
+                                        "Unable to save the crop."
+                                    }
                         }
                     }
                 }
             }
         )
     }
+
 
     // =========================================================
     // DELETE CONFIRMATION DIALOG
@@ -421,8 +495,15 @@ fun CropsScreen(
             title = {
 
                 Text(
-                    text = "Delete crop?",
-                    fontWeight = FontWeight.Bold
+                    text =
+                        if (LanguageManager.isHindi()) {
+                            "फसल हटाएँ?"
+                        } else {
+                            "Delete crop?"
+                        },
+
+                    fontWeight =
+                        FontWeight.Bold
                 )
             },
 
@@ -430,8 +511,11 @@ fun CropsScreen(
 
                 Text(
                     text =
-                        "Are you sure you want to delete \"${crop.name}\"?\n\n" +
-                                "This action cannot be undone."
+                        if (LanguageManager.isHindi()) {
+                            "\"${crop.name}\" को हटाना चाहते हैं?\n\nयह कार्रवाई वापस नहीं की जा सकती।"
+                        } else {
+                            "Are you sure you want to delete \"${crop.name}\"?\n\nThis action cannot be undone."
+                        }
                 )
             },
 
@@ -454,7 +538,11 @@ fun CropsScreen(
 
                                 errorMessage =
                                     exception.localizedMessage
-                                        ?: "Unable to delete the crop."
+                                        ?: if (LanguageManager.isHindi()) {
+                                            "फसल हटाई नहीं जा सकी।"
+                                        } else {
+                                            "Unable to delete the crop."
+                                        }
 
                                 cropBeingDeleted = null
                             }
@@ -462,7 +550,13 @@ fun CropsScreen(
                     }
                 ) {
 
-                    Text("Delete")
+                    Text(
+                        if (LanguageManager.isHindi()) {
+                            "हटाएँ"
+                        } else {
+                            "Delete"
+                        }
+                    )
                 }
             },
 
@@ -475,7 +569,13 @@ fun CropsScreen(
                     }
                 ) {
 
-                    Text("Cancel")
+                    Text(
+                        if (LanguageManager.isHindi()) {
+                            "रद्द करें"
+                        } else {
+                            "Cancel"
+                        }
+                    )
                 }
             }
         )
@@ -499,14 +599,16 @@ private fun CropCard(
         mutableStateOf(false)
     }
 
+
     Card(
         modifier = Modifier.fillMaxWidth(),
 
         shape = RoundedCornerShape(24.dp),
 
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 2.dp
-        )
+        elevation =
+            CardDefaults.cardElevation(
+                defaultElevation = 2.dp
+            )
     ) {
 
         Column(
@@ -519,6 +621,7 @@ private fun CropCard(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
+
                 verticalAlignment =
                     Alignment.CenterVertically
             ) {
@@ -557,6 +660,7 @@ private fun CropCard(
                     }
                 }
 
+
                 // =================================================
                 // THREE DOT MENU
                 // =================================================
@@ -576,6 +680,7 @@ private fun CropCard(
                         )
                     }
 
+
                     DropdownMenu(
                         expanded = showMenu,
 
@@ -591,7 +696,14 @@ private fun CropCard(
                         DropdownMenuItem(
 
                             text = {
-                                Text("Edit crop")
+
+                                Text(
+                                    if (LanguageManager.isHindi()) {
+                                        "फसल संपादित करें"
+                                    } else {
+                                        "Edit crop"
+                                    }
+                                )
                             },
 
                             onClick = {
@@ -601,6 +713,7 @@ private fun CropCard(
                             }
                         )
 
+
                         // -----------------------------------------
                         // DELETE
                         // -----------------------------------------
@@ -608,7 +721,14 @@ private fun CropCard(
                         DropdownMenuItem(
 
                             text = {
-                                Text("Delete crop")
+
+                                Text(
+                                    if (LanguageManager.isHindi()) {
+                                        "फसल हटाएँ"
+                                    } else {
+                                        "Delete crop"
+                                    }
+                                )
                             },
 
                             onClick = {
@@ -621,9 +741,11 @@ private fun CropCard(
                 }
             }
 
+
             Spacer(
                 modifier = Modifier.height(16.dp)
             )
+
 
             // =================================================
             // CROP DETAILS
@@ -645,7 +767,12 @@ private fun CropCard(
                 ) {
 
                     Text(
-                        text = "Stage",
+                        text =
+                            if (LanguageManager.isHindi()) {
+                                "अवस्था"
+                            } else {
+                                "Stage"
+                            },
 
                         style =
                             MaterialTheme.typography.labelMedium
@@ -653,13 +780,19 @@ private fun CropCard(
 
                     Text(
                         text = crop.stage.ifBlank {
-                            "Not specified"
+
+                            if (LanguageManager.isHindi()) {
+                                "निर्दिष्ट नहीं"
+                            } else {
+                                "Not specified"
+                            }
                         },
 
                         fontWeight =
                             FontWeight.Medium
                     )
                 }
+
 
                 // -------------------------------------------------
                 // AREA
@@ -670,7 +803,12 @@ private fun CropCard(
                 ) {
 
                     Text(
-                        text = "Area",
+                        text =
+                            if (LanguageManager.isHindi()) {
+                                "क्षेत्रफल"
+                            } else {
+                                "Area"
+                            },
 
                         style =
                             MaterialTheme.typography.labelMedium
@@ -678,7 +816,12 @@ private fun CropCard(
 
                     Text(
                         text = crop.area.ifBlank {
-                            "Not specified"
+
+                            if (LanguageManager.isHindi()) {
+                                "निर्दिष्ट नहीं"
+                            } else {
+                                "Not specified"
+                            }
                         },
 
                         fontWeight =
@@ -687,9 +830,11 @@ private fun CropCard(
                 }
             }
 
+
             Spacer(
                 modifier = Modifier.height(16.dp)
             )
+
 
             // =================================================
             // PLANTING DATE
@@ -698,7 +843,12 @@ private fun CropCard(
             Column {
 
                 Text(
-                    text = "Planting date",
+                    text =
+                        if (LanguageManager.isHindi()) {
+                            "बुवाई की तारीख"
+                        } else {
+                            "Planting date"
+                        },
 
                     style =
                         MaterialTheme.typography.labelMedium
@@ -706,7 +856,12 @@ private fun CropCard(
 
                 Text(
                     text = crop.plantingDate.ifBlank {
-                        "Not specified"
+
+                        if (LanguageManager.isHindi()) {
+                            "निर्दिष्ट नहीं"
+                        } else {
+                            "Not specified"
+                        }
                     },
 
                     fontWeight =
@@ -778,6 +933,7 @@ private fun AddCropDialog(
         mutableStateOf<String?>(null)
     }
 
+
     // =========================================================
     // MAIN DIALOG
     // =========================================================
@@ -789,15 +945,29 @@ private fun AddCropDialog(
         title = {
 
             Text(
-                text = if (initialCrop == null) {
-                    "Add a crop"
-                } else {
-                    "Edit crop"
-                },
+                text =
+                    if (initialCrop == null) {
 
-                fontWeight = FontWeight.Bold
+                        if (LanguageManager.isHindi()) {
+                            "फसल जोड़ें"
+                        } else {
+                            "Add a crop"
+                        }
+
+                    } else {
+
+                        if (LanguageManager.isHindi()) {
+                            "फसल संपादित करें"
+                        } else {
+                            "Edit crop"
+                        }
+                    },
+
+                fontWeight =
+                    FontWeight.Bold
             )
         },
+
 
         text = {
 
@@ -829,15 +999,30 @@ private fun AddCropDialog(
                         Modifier.fillMaxWidth(),
 
                     label = {
-                        Text("Crop name")
+
+                        Text(
+                            if (LanguageManager.isHindi()) {
+                                "फसल का नाम"
+                            } else {
+                                "Crop name"
+                            }
+                        )
                     },
 
                     placeholder = {
-                        Text("Example: Tomato")
+
+                        Text(
+                            if (LanguageManager.isHindi()) {
+                                "उदाहरण: टमाटर"
+                            } else {
+                                "Example: Tomato"
+                            }
+                        )
                     },
 
                     singleLine = true
                 )
+
 
                 // =================================================
                 // VARIETY
@@ -855,15 +1040,30 @@ private fun AddCropDialog(
                         Modifier.fillMaxWidth(),
 
                     label = {
-                        Text("Variety")
+
+                        Text(
+                            if (LanguageManager.isHindi()) {
+                                "किस्म"
+                            } else {
+                                "Variety"
+                            }
+                        )
                     },
 
                     placeholder = {
-                        Text("Example: Hybrid 46")
+
+                        Text(
+                            if (LanguageManager.isHindi()) {
+                                "उदाहरण: हाइब्रिड 46"
+                            } else {
+                                "Example: Hybrid 46"
+                            }
+                        )
                     },
 
                     singleLine = true
                 )
+
 
                 // =================================================
                 // GROWTH STAGE
@@ -883,15 +1083,30 @@ private fun AddCropDialog(
                         Modifier.fillMaxWidth(),
 
                     label = {
-                        Text("Growth stage")
+
+                        Text(
+                            if (LanguageManager.isHindi()) {
+                                "विकास की अवस्था"
+                            } else {
+                                "Growth stage"
+                            }
+                        )
                     },
 
                     placeholder = {
-                        Text("Example: Flowering stage")
+
+                        Text(
+                            if (LanguageManager.isHindi()) {
+                                "उदाहरण: फूल आने की अवस्था"
+                            } else {
+                                "Example: Flowering stage"
+                            }
+                        )
                     },
 
                     singleLine = true
                 )
+
 
                 // =================================================
                 // AREA
@@ -909,15 +1124,30 @@ private fun AddCropDialog(
                         Modifier.fillMaxWidth(),
 
                     label = {
-                        Text("Area")
+
+                        Text(
+                            if (LanguageManager.isHindi()) {
+                                "क्षेत्रफल"
+                            } else {
+                                "Area"
+                            }
+                        )
                     },
 
                     placeholder = {
-                        Text("Example: 1.5 acres")
+
+                        Text(
+                            if (LanguageManager.isHindi()) {
+                                "उदाहरण: 1.5 एकड़"
+                            } else {
+                                "Example: 1.5 acres"
+                            }
+                        )
                     },
 
                     singleLine = true
                 )
+
 
                 // =================================================
                 // PLANTING DATE
@@ -936,11 +1166,25 @@ private fun AddCropDialog(
                         Modifier.fillMaxWidth(),
 
                     label = {
-                        Text("Planting date")
+
+                        Text(
+                            if (LanguageManager.isHindi()) {
+                                "बुवाई की तारीख"
+                            } else {
+                                "Planting date"
+                            }
+                        )
                     },
 
                     placeholder = {
-                        Text("Select planting date")
+
+                        Text(
+                            if (LanguageManager.isHindi()) {
+                                "बुवाई की तारीख चुनें"
+                            } else {
+                                "Select planting date"
+                            }
+                        )
                     },
 
                     readOnly = true,
@@ -960,6 +1204,7 @@ private fun AddCropDialog(
                     }
                 )
 
+
                 // =================================================
                 // CROP EMOJI
                 // =================================================
@@ -976,7 +1221,14 @@ private fun AddCropDialog(
                         Modifier.fillMaxWidth(),
 
                     label = {
-                        Text("Crop emoji")
+
+                        Text(
+                            if (LanguageManager.isHindi()) {
+                                "फसल का इमोजी"
+                            } else {
+                                "Crop emoji"
+                            }
+                        )
                     },
 
                     placeholder = {
@@ -985,6 +1237,7 @@ private fun AddCropDialog(
 
                     singleLine = true
                 )
+
 
                 // =================================================
                 // VALIDATION MESSAGE
@@ -1004,6 +1257,7 @@ private fun AddCropDialog(
             }
         },
 
+
         // =========================================================
         // SAVE / UPDATE BUTTON
         // =========================================================
@@ -1021,10 +1275,15 @@ private fun AddCropDialog(
                     if (name.isBlank()) {
 
                         validationMessage =
-                            "Please enter the crop name."
+                            if (LanguageManager.isHindi()) {
+                                "कृपया फसल का नाम दर्ज करें।"
+                            } else {
+                                "Please enter the crop name."
+                            }
 
                         return@TextButton
                     }
+
 
                     // ---------------------------------------------
                     // VALIDATE GROWTH STAGE
@@ -1033,10 +1292,15 @@ private fun AddCropDialog(
                     if (stage.isBlank()) {
 
                         validationMessage =
-                            "Please enter the growth stage."
+                            if (LanguageManager.isHindi()) {
+                                "कृपया फसल की विकास अवस्था दर्ज करें।"
+                            } else {
+                                "Please enter the growth stage."
+                            }
 
                         return@TextButton
                     }
+
 
                     // ---------------------------------------------
                     // VALIDATE PLANTING DATE
@@ -1045,10 +1309,15 @@ private fun AddCropDialog(
                     if (plantingDate.isBlank()) {
 
                         validationMessage =
-                            "Please select the planting date."
+                            if (LanguageManager.isHindi()) {
+                                "कृपया बुवाई की तारीख चुनें।"
+                            } else {
+                                "Please select the planting date."
+                            }
 
                         return@TextButton
                     }
+
 
                     // ---------------------------------------------
                     // CREATE CROP OBJECT
@@ -1061,7 +1330,8 @@ private fun AddCropDialog(
                         // For a new crop the ID remains blank,
                         // and CropRepository generates one.
 
-                        id = initialCrop?.id ?: "",
+                        id =
+                            initialCrop?.id ?: "",
 
                         name =
                             name.trim(),
@@ -1092,13 +1362,25 @@ private fun AddCropDialog(
 
                 Text(
                     if (initialCrop == null) {
-                        "Save crop"
+
+                        if (LanguageManager.isHindi()) {
+                            "फसल सेव करें"
+                        } else {
+                            "Save crop"
+                        }
+
                     } else {
-                        "Update crop"
+
+                        if (LanguageManager.isHindi()) {
+                            "फसल अपडेट करें"
+                        } else {
+                            "Update crop"
+                        }
                     }
                 )
             }
         },
+
 
         // =========================================================
         // CANCEL BUTTON
@@ -1110,10 +1392,17 @@ private fun AddCropDialog(
                 onClick = onDismiss
             ) {
 
-                Text("Cancel")
+                Text(
+                    if (LanguageManager.isHindi()) {
+                        "रद्द करें"
+                    } else {
+                        "Cancel"
+                    }
+                )
             }
         }
     )
+
 
     // =========================================================
     // DATE PICKER
@@ -1153,7 +1442,13 @@ private fun AddCropDialog(
                     }
                 ) {
 
-                    Text("Select")
+                    Text(
+                        if (LanguageManager.isHindi()) {
+                            "चुनें"
+                        } else {
+                            "Select"
+                        }
+                    )
                 }
             },
 
@@ -1166,7 +1461,13 @@ private fun AddCropDialog(
                     }
                 ) {
 
-                    Text("Cancel")
+                    Text(
+                        if (LanguageManager.isHindi()) {
+                            "रद्द करें"
+                        } else {
+                            "Cancel"
+                        }
+                    )
                 }
             }
         ) {
