@@ -121,7 +121,6 @@ This creates a connected ecosystem rather than treating each feature as a separa
 - 🌦️ Weather information
 - 💧 Irrigation reminders
 - 📢 Agricultural advisories
-- 🧑‍🔬 Expert consultation
 - 🛒 Agricultural marketplace
 - 📦 Shopping cart
 - 🧾 Order placement
