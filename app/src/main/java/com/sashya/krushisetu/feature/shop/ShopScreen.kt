@@ -1810,6 +1810,10 @@ private fun CartView(
             .fillMaxSize()
             .background(FieldCream)
             .statusBarsPadding()
+            // The app's custom bottom navigation is drawn by the parent
+            // and does not automatically consume Scaffold bottom padding.
+            // Reserve space for it so the checkout footer stays visible.
+            .padding(bottom = 96.dp)
     ) {
 
         Row(
@@ -1996,7 +2000,9 @@ private fun CartView(
             else -> {
 
                 Column(
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
                 ) {
 
                     LazyColumn(

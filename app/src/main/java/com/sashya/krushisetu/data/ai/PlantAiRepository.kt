@@ -116,7 +116,7 @@ class PlantAiRepository {
               agricultural term genuinely needs its English name in brackets.
 
             IMPORTANT OUTPUT INSTRUCTION:
-
+            
             - Return ONE complete JSON object.
             - Complete ALL required fields before ending the response.
             - Do not stop after generating possibleIssue.
@@ -143,6 +143,8 @@ class PlantAiRepository {
               is required.
             - Use simple, farmer-friendly language appropriate for the
               detected language.
+            - Then according to the data given by the farmer suggestion them the pesticides or medicine 
+               which are common so they can purchase any product without thinking the brand.
         """.trimIndent()
 
         return JSONObject()
